@@ -488,6 +488,9 @@ class FileTransferApp {
                     this.updateConnectionStatus('connected', '已连接');
                 }
                 this.connectToAllDevices();
+                setTimeout(() => {
+                    conn.send({ type: 'request-devices', from: this.peerId });
+                }, 300);
             }
 
             if (this.isHost && conn.peer !== this.peerId) {
@@ -543,6 +546,19 @@ class FileTransferApp {
                     if (this.isHost) {
                         setTimeout(() => this.broadcastNewDevice(conn.peer, data.nickname), 500);
                     }
+                }
+            } else if (data.type === 'request-devices') {
+                if (this.isHost) {
+                    const devicesList = Object.keys(this.devices)
+                        .filter(id => id !== this.peerId && id !== data.from)
+                        .map(id => ({
+                            deviceId: id,
+                            nickname: this.devices[id]?.nickname || '匿名'
+                        }));
+                    conn.send({
+                        type: 'devices-list',
+                        devices: devicesList
+                    });
                 }
             } else if (data.type === 'new-device') {
                 this.handleNewDevice(data);
@@ -906,6 +922,23 @@ class FileTransferApp {
     handleData(data, conn = null) {
         if (data.type === 'heartbeat') {
             return;
+        } else if (data.type === 'devices-list') {
+            if (data.devices && Array.isArray(data.devices)) {
+                data.devices.forEach(dev => {
+                    if (dev.deviceId !== this.peerId && !this.devices[dev.deviceId]) {
+                        this.devices[dev.deviceId] = {
+                            id: dev.deviceId,
+                            nickname: dev.nickname,
+                            joinedAt: Date.now()
+                        };
+                    }
+                });
+                this.renderDevicesList();
+                this.refreshTargetDeviceLists();
+                if (!this.isHost) {
+                    this.connectToAllDevices();
+                }
+            }
         } else if (data.type === 'new-device') {
             this.handleNewDevice(data);
         } else if (data.type === 'file-meta') {
