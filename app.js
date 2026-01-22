@@ -433,6 +433,21 @@ class FileTransferApp {
                 }
             }
 
+            if (this.isHost && conn.peer !== this.peerId) {
+                if (!this.devices[conn.peer]) {
+                    this.devices[conn.peer] = {
+                        id: conn.peer,
+                        nickname: '新设备',
+                        joinedAt: Date.now()
+                    };
+                    this.renderDevicesList();
+                }
+                const otherDevicesCount = Object.keys(this.devices).length - 1;
+                if (otherDevicesCount > 0) {
+                    this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+                }
+            }
+
             setTimeout(() => {
                 if (this.pendingConnections.has(conn.peer)) {
                     this.pendingConnections.delete(conn.peer);
@@ -453,17 +468,14 @@ class FileTransferApp {
                     nickname: data.nickname,
                     joinedAt: this.devices[conn.peer]?.joinedAt || Date.now()
                 };
+                this.renderDevicesList();
+                this.refreshTargetDeviceLists();
+                const otherDevicesCount = Object.keys(this.devices).length - 1;
+                if (otherDevicesCount > 0) {
+                    this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+                }
                 if (isNewDevice) {
-                    this.onPeerConnected(conn.peer);
-                    this.renderDevicesList();
-                    this.refreshTargetDeviceLists();
-                    const otherDevicesCount = Object.keys(this.devices).length - 1;
-                    if (otherDevicesCount > 0) {
-                        this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
-                    }
                     this.showToast(`${data.nickname} 加入了房间`, 'success');
-                } else {
-                    this.renderDevicesList();
                 }
             } else {
                 this.handleData(data, conn);
