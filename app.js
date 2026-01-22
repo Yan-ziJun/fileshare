@@ -269,7 +269,7 @@ class FileTransferApp {
     broadcastNewDevice(deviceId, nickname) {
         const otherDeviceIds = Object.keys(this.devices).filter(id => id !== deviceId && id !== this.peerId);
 
-        this.broadcast({
+        const newDeviceInfo = {
             type: 'new-device',
             deviceId: deviceId,
             nickname: nickname,
@@ -277,6 +277,23 @@ class FileTransferApp {
                 deviceId: id,
                 nickname: this.devices[id]?.nickname || '匿名'
             }))
+        };
+
+        const notifyExistingDevices = {
+            type: 'new-device',
+            deviceId: deviceId,
+            nickname: nickname,
+            existingDevices: []
+        };
+
+        this.connections.forEach(conn => {
+            if (conn.open) {
+                if (conn.peer === deviceId) {
+                    conn.send(newDeviceInfo);
+                } else if (otherDeviceIds.includes(conn.peer)) {
+                    conn.send(notifyExistingDevices);
+                }
+            }
         });
     }
 
@@ -513,20 +530,31 @@ class FileTransferApp {
     }
 
     broadcast(data) {
-        console.log('[Broadcast] 发送消息:', data.type, '到', this.connections.length, '个连接');
-
-        const otherDeviceIds = Object.keys(this.devices).filter(id => id !== this.peerId);
         const openConnections = this.connections.filter(c => c.open);
 
-        otherDeviceIds.forEach(deviceId => {
-            const conn = openConnections.find(c => c.peer === deviceId);
-            if (conn) {
-                conn.send(data);
-            } else {
-                this.connectAndSend(deviceId, data);
-            }
-        });
-        console.log('[Broadcast] 当前 connections 数组:', this.connections.map(c => c.peer));
+        if (this.isHost) {
+            Object.keys(this.devices).forEach(deviceId => {
+                if (deviceId !== this.peerId) {
+                    const conn = openConnections.find(c => c.peer === deviceId);
+                    if (conn) {
+                        conn.send(data);
+                    } else {
+                        this.connectAndSend(deviceId, data);
+                    }
+                }
+            });
+        } else {
+            Object.keys(this.devices).forEach(deviceId => {
+                if (deviceId !== this.peerId) {
+                    const conn = openConnections.find(c => c.peer === deviceId);
+                    if (conn) {
+                        conn.send(data);
+                    } else {
+                        this.connectAndSend(deviceId, data);
+                    }
+                }
+            });
+        }
     }
 
     broadcastExcept(excludePeerId, data) {
@@ -820,7 +848,6 @@ class FileTransferApp {
     }
 
     handleData(data, conn = null) {
-        console.log('[HandleData] 收到数据:', data.type, 'from:', conn?.peer);
         if (data.type === 'new-device') {
             this.handleNewDevice(data);
         } else if (data.type === 'file-meta') {
@@ -862,6 +889,8 @@ class FileTransferApp {
                     }
                 }
             });
+            this.renderDevicesList();
+            this.refreshTargetDeviceLists();
         }
 
         if (!this.connections.some(c => c.peer === deviceId)) {
@@ -962,7 +991,6 @@ class FileTransferApp {
     }
 
     receiveMessage(data) {
-        console.log('[receiveMessage] 收到消息:', data);
         const { content, senderName, time } = data;
         this.peerNickname = senderName;
         this.elements.peerNickname.textContent = senderName;
