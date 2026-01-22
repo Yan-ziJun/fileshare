@@ -28,6 +28,7 @@ class FileTransferApp {
             peerInfo: document.getElementById('peerInfo'),
             transferPanel: document.getElementById('transferPanel'),
             receivePanel: document.getElementById('receivePanel'),
+            transferProgress: document.querySelector('.transfer-progress'),
             fileInput: document.getElementById('fileInput'),
             fileList: document.getElementById('fileList'),
             sendFilesBtn: document.getElementById('sendFilesBtn'),
@@ -69,7 +70,8 @@ class FileTransferApp {
     }
 
     generateRoomId() {
-        return 'ft-' + Math.random().toString(36).substr(2, 9);
+        const num = Math.floor(1000 + Math.random() * 9000);
+        return 'yan' + num;
     }
 
     createRoom() {
@@ -288,99 +290,73 @@ class FileTransferApp {
 
         this.addProgressItem(fileId, file.name, fileSize);
 
-        const WINDOW_SIZE = 32;
-        let sentChunks = 0;
-        let ackedChunks = 0;
-        const acked = new Set();
-        const pending = new Map();
+        let currentChunk = 0;
+        let lastProgressTime = Date.now();
 
-        const sendNextBatch = () => {
-            while (sentChunks < totalChunks && sentChunks - ackedChunks < WINDOW_SIZE) {
-                const chunkIndex = sentChunks;
-                const start = chunkIndex * this.CHUNK_SIZE;
-                const end = Math.min(start + this.CHUNK_SIZE, fileSize);
-                const chunkData = file.slice(start, end);
+        const sendNext = () => {
+            if (currentChunk >= totalChunks) {
+                this.conn.send({
+                    type: 'file-complete',
+                    fileId: fileId,
+                    fileSize: fileSize
+                });
 
-                const reader = new FileReader();
-
-                reader.onload = (e) => {
-                    this.conn.send({
-                        type: 'file-chunk',
-                        fileId: fileId,
-                        chunk: e.target.result,
-                        chunkIndex: chunkIndex,
-                        totalChunks: totalChunks
-                    });
-
-                    pending.set(chunkIndex, {
-                        data: e.target.result,
-                        retries: 0,
-                        maxRetries: 3
-                    });
-
-                    const progress = Math.round(((sentChunks + 1) / totalChunks) * 100);
-                    const bytesSent = Math.min((sentChunks + 1) * this.CHUNK_SIZE, fileSize);
-                    this.updateProgress(fileId, progress, bytesSent);
-
-                    sentChunks++;
-
-                    if (sentChunks < totalChunks) {
-                        sendNextBatch();
-                    }
-                };
-
-                reader.onerror = () => {
-                    this.showToast(`文件读取失败`, 'error');
-                };
-
-                reader.readAsArrayBuffer(chunkData);
-
-                if (reader.readyState === 1) {
-                    break;
-                }
-            }
-        };
-
-        const checkComplete = () => {
-            if (ackedChunks >= totalChunks) {
                 this.updateProgress(fileId, 100, fileSize, '已完成');
                 this.addToHistory('sent', file.name, fileSize);
                 this.showToast(`文件 "${file.name}" 发送完成`, 'success');
                 return;
             }
 
-            pending.forEach((info, chunkIndex) => {
-                if (!acked.has(chunkIndex) && info.retries < info.maxRetries) {
-                    info.retries++;
-                    this.conn.send({
-                        type: 'file-chunk',
-                        fileId: fileId,
-                        chunk: info.data,
-                        chunkIndex: chunkIndex,
-                        totalChunks: totalChunks
-                    });
-                }
+            const start = currentChunk * this.CHUNK_SIZE;
+            const end = Math.min(start + this.CHUNK_SIZE, fileSize);
+            const chunkData = file.slice(start, end);
+
+            if (chunkData.size === 0) {
+                currentChunk = totalChunks;
+                this.conn.send({
+                    type: 'file-complete',
+                    fileId: fileId,
+                    fileSize: fileSize
+                });
+                return;
+            }
+
+            this.conn.send({
+                type: 'file-chunk',
+                fileId: fileId,
+                chunk: chunkData,
+                chunkIndex: currentChunk,
+                totalChunks: totalChunks,
+                fileName: file.name,
+                fileSize: fileSize
             });
 
-            setTimeout(checkComplete, 200);
+            currentChunk++;
+
+            const now = Date.now();
+            if (now - lastProgressTime >= 100) {
+                const progress = Math.round((currentChunk / totalChunks) * 100);
+                const bytesSent = Math.min(currentChunk * this.CHUNK_SIZE, fileSize);
+                this.updateProgress(fileId, progress, bytesSent);
+                lastProgressTime = now;
+            }
+
+            if (currentChunk < totalChunks) {
+                setTimeout(sendNext, 5);
+            } else {
+                this.conn.send({
+                    type: 'file-complete',
+                    fileId: fileId,
+                    fileSize: fileSize
+                });
+
+                this.updateProgress(fileId, 100, fileSize, '已完成');
+                this.addToHistory('sent', file.name, fileSize);
+                this.showToast(`文件 "${file.name}" 发送完成`, 'success');
+            }
         };
 
-        this.fileChunks[fileId] = {
-            type: 'sending',
-            fileName: file.name,
-            fileSize: fileSize,
-            totalChunks: totalChunks,
-            setAcked: (idx) => {
-                acked.add(idx);
-                ackedChunks++;
-            },
-            getAckedCount: () => ackedChunks,
-            getTotalChunks: () => totalChunks,
-            checkComplete: checkComplete,
-            isComplete: () => ackedChunks >= totalChunks
-        };
-
-        setTimeout(sendNextBatch, 100);
+        setTimeout(sendNext, 50);
     }
 
     handleData(data) {
@@ -390,40 +366,46 @@ class FileTransferApp {
             this.receiveFileChunk(data);
         } else if (data.type === 'file-complete') {
             this.completeFileReceive(data);
-        } else if (data.type === 'chunk-ack') {
-            this.handleChunkAck(data);
-        }
-    }
-
-    handleChunkAck(data) {
-        const { fileId, chunkIndices } = data;
-        const fileData = this.fileChunks[fileId];
-
-        if (!fileData || fileData.type !== 'sending') {
-            return;
-        }
-
-        if (Array.isArray(chunkIndices)) {
-            chunkIndices.forEach(idx => fileData.setAcked(idx));
-        } else {
-            fileData.setAcked(chunkIndices);
-        }
-
-        if (fileData.isComplete()) {
-            fileData.checkComplete();
         }
     }
 
     receiveFileMeta(data) {
-        const { fileId, fileName, fileSize, totalChunks } = data;
+        const { fileId, fileName, fileSize } = data;
         this.fileChunks[fileId] = {
             fileName: fileName,
             fileSize: fileSize,
             chunks: {},
-            receivedChunks: new Set()
+            receivedChunks: 0
         };
 
         this.renderIncomingFile(fileId, fileName, fileSize);
+    }
+
+    receiveFileChunk(data) {
+        const { fileId, chunk, chunkIndex, totalChunks, fileName, fileSize } = data;
+
+        if (!this.fileChunks[fileId]) {
+            this.fileChunks[fileId] = {
+                fileName: fileName,
+                fileSize: fileSize,
+                chunks: {},
+                receivedChunks: 0
+            };
+        }
+
+        const fileData = this.fileChunks[fileId];
+
+        if (fileData.chunks[chunkIndex]) {
+            return;
+        }
+
+        fileData.chunks[chunkIndex] = chunk;
+        fileData.receivedChunks++;
+
+        const progress = Math.round((fileData.receivedChunks / totalChunks) * 100);
+        const bytesReceived = Math.min(fileData.receivedChunks * this.CHUNK_SIZE, fileData.fileSize);
+
+        this.updateProgress(fileId, progress, bytesReceived);
     }
 
     renderIncomingFile(fileId, fileName, fileSize) {
@@ -449,72 +431,19 @@ class FileTransferApp {
         if (!fileData) return;
 
         this.addProgressItem(fileId, fileData.fileName, fileData.fileSize);
-        const incomingEl = document.getElementById('incoming-' + fileId);
-        if (incomingEl) incomingEl.classList.add('hidden');
+        document.getElementById('incoming-' + fileId).classList.add('hidden');
 
-        const chunkIndices = Array.from(fileData.receivedChunks).sort((a, b) => a - b);
-        chunkIndices.forEach(index => {
-            if (fileData.chunks[index]) {
-                this.processReceivedChunk(fileId, index);
+        for (let i = 0; i < fileData.receivedChunks; i++) {
+            if (fileData.chunks[i]) {
+                this.processReceivedChunk(fileId, i);
             }
-        });
+        }
     }
 
     declineFile(fileId) {
         delete this.fileChunks[fileId];
         document.getElementById('incoming-' + fileId).remove();
         this.elements.incomingFiles.innerHTML = '<p class="empty-tip">暂无接收文件</p>';
-    }
-
-    receiveFileChunk(data) {
-        const { fileId, chunk, chunkIndex, fileSize, fileName, totalChunks } = data;
-
-        if (!this.fileChunks[fileId]) {
-            this.fileChunks[fileId] = {
-                fileSize: fileSize || 0,
-                fileName: fileName || '',
-                chunks: {},
-                receivedChunks: new Set(),
-                lastAckTime: 0,
-                pendingAcks: new Set()
-            };
-        }
-
-        const fileData = this.fileChunks[fileId];
-
-        if (fileData.chunks[chunkIndex]) {
-            return;
-        }
-
-        fileData.chunks[chunkIndex] = chunk;
-        fileData.receivedChunks.add(chunkIndex);
-        fileData.pendingAcks.add(chunkIndex);
-
-        const receivedCount = fileData.receivedChunks.size;
-        const progress = Math.round((receivedCount / totalChunks) * 100);
-        const bytesReceived = Math.min(receivedCount * this.CHUNK_SIZE, fileData.fileSize);
-
-        this.updateProgress(fileId, progress, bytesReceived);
-
-        const now = Date.now();
-        if (now - fileData.lastAckTime > 50 || fileData.pendingAcks.size >= 8) {
-            this.sendBatchAck(fileId);
-        }
-    }
-
-    sendBatchAck(fileId) {
-        const fileData = this.fileChunks[fileId];
-        if (!fileData || fileData.pendingAcks.size === 0) return;
-
-        const acks = Array.from(fileData.pendingAcks);
-        fileData.pendingAcks.clear();
-        fileData.lastAckTime = Date.now();
-
-        this.conn.send({
-            type: 'chunk-ack',
-            fileId: fileId,
-            chunkIndices: acks
-        });
     }
 
     processReceivedChunk(fileId, chunkIndex) {
@@ -560,9 +489,8 @@ class FileTransferApp {
 
         const checkAndDownload = () => {
             const totalChunks = Math.ceil(fileSize / this.CHUNK_SIZE);
-            const receivedCount = fileData.receivedChunks.size;
 
-            if (receivedCount >= totalChunks) {
+            if (fileData.receivedChunks >= totalChunks) {
                 this.processReceivedChunk(fileId, 0);
             } else {
                 setTimeout(checkAndDownload, 100);
@@ -573,6 +501,8 @@ class FileTransferApp {
     }
 
     addProgressItem(fileId, fileName, fileSize) {
+        this.elements.transferProgress.classList.remove('hidden');
+
         const progressItem = document.createElement('div');
         progressItem.className = 'progress-item';
         progressItem.id = 'progress-item-' + fileId;
@@ -585,17 +515,32 @@ class FileTransferApp {
                 <div class="progress-bar" id="progress-bar-${fileId}" style="width: 0%"></div>
             </div>
             <div class="progress-details">
-                <span id="progress-current-${fileId}">0 KB</span>
-                <span id="progress-total-${fileId}">/ ${this.formatFileSize(fileSize)}</span>
+                <div>
+                    <span id="progress-current-${fileId}">0 KB</span>
+                    <span id="progress-total-${fileId}"> / ${this.formatFileSize(fileSize)}</span>
+                </div>
+                <div class="progress-info">
+                    <span id="progress-speed-${fileId}" class="progress-speed"></span>
+                    <span id="progress-time-${fileId}" class="progress-time"></span>
+                </div>
             </div>
         `;
         this.elements.progressList.appendChild(progressItem);
+
+        this.fileChunks[fileId] = {
+            ...(this.fileChunks[fileId] || {}),
+            startTime: Date.now(),
+            lastBytes: 0,
+            fileSize: fileSize
+        };
     }
 
     updateProgress(fileId, percentage, currentSize, status = null) {
         const progressBar = document.getElementById('progress-bar-' + fileId);
         const progressStatus = document.getElementById('progress-status-' + fileId);
         const progressCurrent = document.getElementById('progress-current-' + fileId);
+        const progressSpeed = document.getElementById('progress-speed-' + fileId);
+        const progressTime = document.getElementById('progress-time-' + fileId);
 
         if (progressBar) {
             progressBar.style.width = percentage + '%';
@@ -605,6 +550,33 @@ class FileTransferApp {
         }
         if (progressCurrent) {
             progressCurrent.textContent = this.formatFileSize(currentSize);
+        }
+
+        const fileData = this.fileChunks[fileId];
+        if (fileData && progressSpeed && progressTime) {
+            const elapsed = (Date.now() - fileData.startTime) / 1000;
+            const bytesDiff = currentSize - fileData.lastBytes;
+
+            if (elapsed > 1 && bytesDiff > 0) {
+                const speed = Math.round(bytesDiff / elapsed);
+                progressSpeed.textContent = `${this.formatFileSize(speed)}/s`;
+
+                const remainingBytes = fileData.fileSize - currentSize;
+                const remainingTime = Math.round(remainingBytes / speed);
+                progressTime.textContent = `约剩${this.formatTime(remainingTime)}`;
+            }
+
+            fileData.lastBytes = currentSize;
+        }
+    }
+
+    formatTime(seconds) {
+        if (seconds < 60) {
+            return `${seconds}秒`;
+        } else if (seconds < 3600) {
+            return `${Math.floor(seconds / 60)}分${seconds % 60}秒`;
+        } else {
+            return `${Math.floor(seconds / 3600)}时${Math.floor((seconds % 3600) / 60)}分`;
         }
     }
 

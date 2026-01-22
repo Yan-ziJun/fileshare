@@ -368,49 +368,76 @@ h2 {
 }
 
 .progress-item {
-    padding: 15px;
+    padding: 20px;
     background: #f8f9ff;
-    border-radius: 8px;
-    margin-bottom: 10px;
+    border-radius: 12px;
+    margin-bottom: 15px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .progress-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
 }
 
 .progress-name {
-    font-weight: 500;
+    font-weight: 600;
     color: #333;
+    font-size: 1rem;
 }
 
 .progress-status {
-    font-size: 0.85rem;
-    color: #666;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #667eea;
 }
 
 .progress-bar-container {
-    height: 8px;
-    background: #e0e0e0;
-    border-radius: 4px;
+    height: 12px;
+    background: #e8e8e8;
+    border-radius: 6px;
     overflow: hidden;
+    position: relative;
 }
 
 .progress-bar {
     height: 100%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    border-radius: 4px;
-    transition: width 0.3s ease;
+    background: linear-gradient(90deg, #667eea 0%, #764ba2 50%, #667eea 100%);
+    background-size: 200% 100%;
+    border-radius: 6px;
+    transition: width 0.2s ease;
+    animation: gradient-move 2s ease infinite;
+}
+
+@keyframes gradient-move {
+    0% { background-position: 0% 50%; }
+    100% { background-position: 200% 50%; }
 }
 
 .progress-details {
     display: flex;
     justify-content: space-between;
-    margin-top: 8px;
+    align-items: center;
+    margin-top: 10px;
     font-size: 0.85rem;
     color: #666;
+}
+
+.progress-info {
+    display: flex;
+    gap: 15px;
+}
+
+.progress-speed {
+    color: #999;
+    font-size: 0.8rem;
+}
+
+.progress-time {
+    color: #999;
+    font-size: 0.8rem;
 }
 
 .history-list {
