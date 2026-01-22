@@ -833,7 +833,7 @@ class FileTransferApp {
             return;
         }
 
-        this.elements.messagesList.innerHTML = [...this.messages].reverse().map(msg => `
+        this.elements.messagesList.innerHTML = this.messages.map(msg => `
             <div class="message-item ${msg.type}">
                 <div class="message-sender">${msg.sender} · ${msg.time}</div>
                 <div class="message-content">${this.escapeHtml(msg.content)}</div>
