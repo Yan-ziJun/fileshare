@@ -3,94 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>网页文件互传工具</title>
+    <title>发个东西 - 局域网传输</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <header>
+        <h1>发个东西</h1>
+        <div id="roomDisplay" class="room-display">
+            <div class="room-id" id="roomId">------</div>
+            <div class="status waiting" id="connectionStatus">等待连接</div>
+        </div>
+    </header>
+
     <div class="container">
-        <header>
-            <h1>文件互传工具</h1>
-        </header>
+        <div class="section">
+            <div class="section-title">文件</div>
+            <div class="file-drop-zone" id="dropZone">
+                <div class="icon">📁</div>
+                <div class="text">松开发送文件</div>
+                <div class="subtext">点击或拖拽文件到此处</div>
+            </div>
+            <input type="file" id="fileInput" class="file-input" multiple>
+            <div id="fileList" class="file-list"></div>
+        </div>
 
-        <main>
-            <section class="connection-panel">
-                <h2>连接设置</h2>
-                <div class="connection-mode">
-                    <button id="createRoomBtn" class="btn btn-primary">
-                        🏠 创建房间
-                    </button>
-                    <span class="divider">或</span>
-                    <button id="joinRoomBtn" class="btn btn-secondary">
-                        🚪 加入房间
-                    </button>
-                </div>
+        <button id="sendFilesBtn" class="btn btn-primary hidden">发送文件</button>
 
-                <div id="roomInfo" class="room-info hidden">
-                    <div class="info-item">
-                        <label>房间ID：</label>
-                        <span id="roomId"></span>
-                        <button id="copyRoomId" class="btn-small" title="复制房间ID">📋</button>
-                    </div>
-                    <div class="info-item">
-                        <label>状态：</label>
-                        <span id="connectionStatus" class="status waiting">等待连接...</span>
-                    </div>
-                </div>
+        <div class="section">
+            <div class="section-title">设置</div>
+            <input type="text" id="nicknameInput" class="nickname-input" placeholder="输入昵称" maxlength="20">
+            <div class="mode-switch" style="margin-top: 12px;">
+                <button id="createRoomBtn" class="btn btn-primary">创建房间</button>
+                <button id="joinRoomBtn" class="btn btn-secondary">加入房间</button>
+            </div>
+            <div id="joinForm" class="join-form">
+                <input type="text" id="roomIdInput" placeholder="输入房间号">
+            </div>
+        </div>
 
-                <div id="joinForm" class="join-form hidden">
-                    <div class="form-group">
-                        <label for="roomIdInput">输入房间ID：</label>
-                        <input type="text" id="roomIdInput" placeholder="粘贴房间ID">
-                    </div>
-                    <button id="confirmJoin" class="btn btn-primary">确认加入</button>
-                </div>
+        <div id="peerInfo" class="peer-info">
+            <span id="peerNickname">对方</span> 已连接
+        </div>
 
-                <div id="peerInfo" class="peer-info hidden">
-                    <p>✅ 对方已连接！可以开始传输文件了。</p>
-                </div>
-            </section>
+        <div class="section messages-area">
+            <div class="section-title">消息</div>
+            <div id="messagesList" class="messages-list">
+                <div class="empty-tip">暂无消息</div>
+            </div>
+            <div class="message-input-area">
+                <textarea id="messageInput" placeholder="输入消息..." rows="1"></textarea>
+                <button id="sendMessageBtn" class="btn btn-primary">发送</button>
+            </div>
+        </div>
 
-            <section id="transferPanel" class="transfer-panel hidden">
-                <h2>📤 发送文件</h2>
-                <div class="file-input-area">
-                    <input type="file" id="fileInput" multiple>
-                    <label for="fileInput" class="file-label">
-                        <span class="icon">📎</span>
-                        <span>选择文件或拖拽文件到此处</span>
-                    </label>
-                </div>
+        <div class="section progress-section hidden">
+            <div class="section-title">传输进度</div>
+            <div id="progressList" class="progress-list"></div>
+        </div>
 
-                <div id="fileList" class="file-list"></div>
-
-                <button id="sendFilesBtn" class="btn btn-send hidden">
-                    🚀 开始发送
-                </button>
-            </section>
-
-            <section id="receivePanel" class="receive-panel">
-                <h2>📥 自动接收</h2>
-                <p style="color: #666; text-align: center; padding: 20px;">
-                    对方发送文件时将自动开始接收
-                </p>
-            </section>
-
-            <section class="transfer-progress hidden">
-                <h2>📊 传输进度</h2>
-                <div id="progressList" class="progress-list"></div>
-            </section>
-
-            <section class="history-panel">
-                <h2>📋 传输历史</h2>
-                <div id="transferHistory" class="history-list">
-                    <p class="empty-tip">暂无传输记录</p>
-                </div>
-                <button id="clearHistory" class="btn btn-small hidden">清空历史</button>
-            </section>
-        </main>
-
-        <footer>
-            <p> 规格严格，功夫到家。 </p>
-        </footer>
+        <div class="section history-area">
+            <div class="section-title">历史记录</div>
+            <div id="transferHistory" class="history-list">
+                <div class="empty-tip">暂无记录</div>
+            </div>
+        </div>
     </div>
 
     <div id="toast" class="toast hidden"></div>

@@ -4,38 +4,41 @@ class FileTransferApp {
         this.conn = null;
         this.roomId = null;
         this.peerId = null;
+        this.nickname = localStorage.getItem('nickname') || '';
+        this.peerNickname = '对方';
         this.filesToSend = [];
         this.receivedFiles = [];
         this.transferHistory = [];
+        this.messages = [];
         this.fileChunks = {};
         this.CHUNK_SIZE = 16 * 1024;
 
         this.initElements();
         this.initEventListeners();
+        this.loadNickname();
     }
 
     initElements() {
         this.elements = {
+            nicknameInput: document.getElementById('nicknameInput'),
             createRoomBtn: document.getElementById('createRoomBtn'),
             joinRoomBtn: document.getElementById('joinRoomBtn'),
-            roomInfo: document.getElementById('roomInfo'),
+            roomDisplay: document.getElementById('roomDisplay'),
             roomId: document.getElementById('roomId'),
-            copyRoomId: document.getElementById('copyRoomId'),
             connectionStatus: document.getElementById('connectionStatus'),
             joinForm: document.getElementById('joinForm'),
             roomIdInput: document.getElementById('roomIdInput'),
-            confirmJoin: document.getElementById('confirmJoin'),
             peerInfo: document.getElementById('peerInfo'),
-            transferPanel: document.getElementById('transferPanel'),
-            receivePanel: document.getElementById('receivePanel'),
-            transferProgress: document.querySelector('.transfer-progress'),
+            peerNickname: document.getElementById('peerNickname'),
+            dropZone: document.getElementById('dropZone'),
             fileInput: document.getElementById('fileInput'),
             fileList: document.getElementById('fileList'),
             sendFilesBtn: document.getElementById('sendFilesBtn'),
-            incomingFiles: document.getElementById('incomingFiles'),
+            messageInput: document.getElementById('messageInput'),
+            sendMessageBtn: document.getElementById('sendMessageBtn'),
+            messagesList: document.getElementById('messagesList'),
             progressList: document.getElementById('progressList'),
             transferHistory: document.getElementById('transferHistory'),
-            clearHistory: document.getElementById('clearHistory'),
             toast: document.getElementById('toast')
         };
     }
@@ -43,30 +46,55 @@ class FileTransferApp {
     initEventListeners() {
         this.elements.createRoomBtn.addEventListener('click', () => this.createRoom());
         this.elements.joinRoomBtn.addEventListener('click', () => this.showJoinForm());
-        this.elements.copyRoomId.addEventListener('click', () => this.copyRoomId());
-        this.elements.confirmJoin.addEventListener('click', () => this.joinRoom());
+        this.elements.roomIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') this.joinRoom();
+        });
         this.elements.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         this.elements.sendFilesBtn.addEventListener('click', () => this.sendFiles());
-        this.elements.clearHistory.addEventListener('click', () => this.clearHistory());
+        this.elements.sendMessageBtn.addEventListener('click', () => this.sendMessage());
 
-        document.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+        this.elements.dropZone.addEventListener('click', () => {
+            this.elements.fileInput.click();
         });
 
-        document.addEventListener('drop', (e) => {
+        this.elements.dropZone.addEventListener('dragover', (e) => {
             e.preventDefault();
             e.stopPropagation();
+            this.elements.dropZone.classList.add('dragover');
+        });
+
+        this.elements.dropZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.elements.dropZone.classList.remove('dragover');
+        });
+
+        this.elements.dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.elements.dropZone.classList.remove('dragover');
             if (e.dataTransfer.files.length > 0) {
                 this.handleFileDrop(e.dataTransfer.files);
             }
         });
 
-        this.elements.roomIdInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                this.joinRoom();
+        this.elements.nicknameInput.addEventListener('input', (e) => {
+            this.nickname = e.target.value.trim();
+            localStorage.setItem('nickname', this.nickname);
+        });
+
+        this.elements.messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                this.sendMessage();
             }
         });
+    }
+
+    loadNickname() {
+        if (this.nickname) {
+            this.elements.nicknameInput.value = this.nickname;
+        }
     }
 
     generateRoomId() {
@@ -77,33 +105,33 @@ class FileTransferApp {
     createRoom() {
         this.roomId = this.generateRoomId();
         this.elements.roomId.textContent = this.roomId;
-        this.elements.roomInfo.classList.remove('hidden');
+        this.elements.roomDisplay.classList.add('show');
         this.elements.createRoomBtn.classList.add('hidden');
         this.elements.joinRoomBtn.classList.add('hidden');
 
         this.initPeer(this.roomId);
-        this.showToast('房间创建成功！等待对方加入...', 'success');
+        this.showToast('房间创建成功', 'success');
     }
 
     showJoinForm() {
-        this.elements.joinForm.classList.toggle('hidden');
+        this.elements.joinForm.classList.toggle('show');
         this.elements.joinRoomBtn.classList.add('hidden');
     }
 
     joinRoom() {
         const inputRoomId = this.elements.roomIdInput.value.trim();
         if (!inputRoomId) {
-            this.showToast('请输入房间ID', 'error');
+            this.showToast('请输入房间号', 'error');
             return;
         }
 
         this.roomId = inputRoomId;
-        this.elements.roomInfo.classList.remove('hidden');
         this.elements.roomId.textContent = this.roomId;
-        this.elements.joinForm.classList.add('hidden');
+        this.elements.roomDisplay.classList.add('show');
+        this.elements.joinForm.classList.remove('show');
 
         this.initPeer();
-        this.showToast('正在连接房间...', 'success');
+        this.showToast('正在连接...', 'success');
     }
 
     initPeer(customId = null) {
@@ -123,7 +151,6 @@ class FileTransferApp {
 
         this.peer.on('open', (id) => {
             this.peerId = id;
-            console.log('Peer ID:', id);
             this.updateConnectionStatus('waiting', '等待连接...');
 
             if (!customId) {
@@ -138,12 +165,13 @@ class FileTransferApp {
         this.peer.on('error', (err) => {
             console.error('Peer error:', err);
             if (err.type === 'unavailable-id') {
-                this.showToast('房间ID已被占用，请刷新重试', 'error');
+                this.showToast('房间号已被占用', 'error');
+                this.updateConnectionStatus('error', '房间号无效');
             } else if (err.type === 'peer-unavailable') {
-                this.showToast('房间不存在或对方已断开', 'error');
+                this.showToast('房间不存在', 'error');
                 this.updateConnectionStatus('error', '连接失败');
             } else {
-                this.showToast('连接错误: ' + err.type, 'error');
+                this.showToast('连接错误', 'error');
             }
         });
     }
@@ -154,13 +182,12 @@ class FileTransferApp {
         });
 
         this.conn.on('open', () => {
-            console.log('Connected to peer');
             this.handleConnection(this.conn);
         });
 
         this.conn.on('error', (err) => {
             console.error('Connection error:', err);
-            this.showToast('连接失败，请检查房间ID', 'error');
+            this.showToast('连接失败', 'error');
             this.updateConnectionStatus('error', '连接失败');
         });
     }
@@ -184,33 +211,25 @@ class FileTransferApp {
         });
 
         this.conn.on('close', () => {
-            this.showToast('对方已断开连接', 'error');
-            this.updateConnectionStatus('error', '连接已断开');
-            this.elements.peerInfo.classList.add('hidden');
-            this.elements.transferPanel.classList.add('hidden');
-            this.elements.receivePanel.classList.add('hidden');
+            this.showToast('对方已断开', 'error');
+            this.resetConnection();
         });
     }
 
     onPeerConnected() {
         this.updateConnectionStatus('connected', '已连接');
-        this.elements.peerInfo.classList.remove('hidden');
-        this.elements.transferPanel.classList.remove('hidden');
-        this.elements.receivePanel.classList.remove('hidden');
-        this.showToast('连接成功！可以开始传输文件了', 'success');
+        this.elements.peerInfo.classList.add('show');
+        this.showToast('连接成功', 'success');
+    }
+
+    resetConnection() {
+        this.updateConnectionStatus('waiting', '已断开');
+        this.elements.peerInfo.classList.remove('show');
     }
 
     updateConnectionStatus(status, message) {
         this.elements.connectionStatus.textContent = message;
         this.elements.connectionStatus.className = 'status ' + status;
-    }
-
-    copyRoomId() {
-        navigator.clipboard.writeText(this.roomId).then(() => {
-            this.showToast('房间ID已复制到剪贴板', 'success');
-        }).catch(() => {
-            this.showToast('复制失败，请手动复制', 'error');
-        });
     }
 
     handleFileSelect(e) {
@@ -234,7 +253,7 @@ class FileTransferApp {
 
     renderFileList() {
         this.elements.fileList.innerHTML = this.filesToSend.map((file, index) => `
-            <div class="file-item">
+            <div class="file-item" data-index="${index}">
                 <div class="file-info">
                     <span class="file-icon">${this.getFileIcon(file.name)}</span>
                     <div class="file-details">
@@ -242,9 +261,24 @@ class FileTransferApp {
                         <span class="file-size">${this.formatFileSize(file.size)}</span>
                     </div>
                 </div>
-                <button class="file-remove" onclick="app.removeFile(${index})">✕</button>
+                <button class="file-remove">×</button>
             </div>
         `).join('');
+
+        this.initFileListEvents();
+    }
+
+    initFileListEvents() {
+        this.elements.fileList.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.file-remove');
+            if (removeBtn) {
+                const fileItem = removeBtn.closest('.file-item');
+                const index = parseInt(fileItem.dataset.index, 10);
+                if (!isNaN(index) && index >= 0 && index < this.filesToSend.length) {
+                    this.removeFile(index);
+                }
+            }
+        });
     }
 
     removeFile(index) {
@@ -257,12 +291,12 @@ class FileTransferApp {
 
     sendFiles() {
         if (this.filesToSend.length === 0) {
-            this.showToast('请先选择文件', 'error');
+            this.showToast('请选择文件', 'error');
             return;
         }
 
         if (!this.conn || !this.conn.open) {
-            this.showToast('未连接到对方', 'error');
+            this.showToast('未连接', 'error');
             return;
         }
 
@@ -275,7 +309,6 @@ class FileTransferApp {
 
         this.filesToSend = [];
         this.renderFileList();
-        this.elements.sendFilesBtn.classList.add('hidden');
     }
 
     sendFile(file) {
@@ -288,7 +321,8 @@ class FileTransferApp {
             fileId: fileId,
             fileName: file.name,
             fileSize: fileSize,
-            totalChunks: totalChunks
+            totalChunks: totalChunks,
+            senderName: this.nickname || '匿名'
         });
 
         this.addProgressItem(fileId, file.name, fileSize);
@@ -306,7 +340,7 @@ class FileTransferApp {
 
                 this.updateProgress(fileId, 100, fileSize, '已完成');
                 this.addToHistory('sent', file.name, fileSize);
-                this.showToast(`文件 "${file.name}" 发送完成`, 'success');
+                this.showToast(`已发送: ${file.name}`, 'success');
                 return;
             }
 
@@ -329,9 +363,7 @@ class FileTransferApp {
                 fileId: fileId,
                 chunk: chunkData,
                 chunkIndex: currentChunk,
-                totalChunks: totalChunks,
-                fileName: file.name,
-                fileSize: fileSize
+                totalChunks: totalChunks
             });
 
             currentChunk++;
@@ -355,11 +387,60 @@ class FileTransferApp {
 
                 this.updateProgress(fileId, 100, fileSize, '已完成');
                 this.addToHistory('sent', file.name, fileSize);
-                this.showToast(`文件 "${file.name}" 发送完成`, 'success');
+                this.showToast(`已发送: ${file.name}`, 'success');
             }
         };
 
         setTimeout(sendNext, 50);
+    }
+
+    sendMessage() {
+        const message = this.elements.messageInput.value.trim();
+        if (!message) {
+            this.showToast('请输入内容', 'error');
+            return;
+        }
+
+        if (!this.conn || !this.conn.open) {
+            this.showToast('未连接', 'error');
+            return;
+        }
+
+        this.conn.send({
+            type: 'message',
+            content: message,
+            senderName: this.nickname || '匿名',
+            time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+        });
+
+        this.addMessage(message, this.nickname || '我', 'sent', '刚刚');
+        this.elements.messageInput.value = '';
+    }
+
+    addMessage(content, sender, type, time) {
+        const msgObj = { content, sender, type, time };
+        this.messages.unshift(msgObj);
+        this.renderMessages();
+    }
+
+    renderMessages() {
+        if (this.messages.length === 0) {
+            this.elements.messagesList.innerHTML = '<p class="empty-tip">暂无消息</p>';
+            return;
+        }
+
+        this.elements.messagesList.innerHTML = this.messages.map(msg => `
+            <div class="message-item ${msg.type}">
+                <div class="message-sender">${msg.sender} · ${msg.time}</div>
+                <div class="message-content">${this.escapeHtml(msg.content)}</div>
+            </div>
+        `).join('');
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     handleData(data) {
@@ -369,15 +450,20 @@ class FileTransferApp {
             this.receiveFileChunk(data);
         } else if (data.type === 'file-complete') {
             this.completeFileReceive(data);
+        } else if (data.type === 'message') {
+            this.receiveMessage(data);
         }
     }
 
     receiveFileMeta(data) {
-        const { fileId, fileName, fileSize, totalChunks } = data;
+        const { fileId, fileName, fileSize, totalChunks, senderName } = data;
 
         if (this.fileChunks[fileId]) {
             return;
         }
+
+        this.peerNickname = senderName;
+        this.elements.peerNickname.textContent = senderName;
 
         this.fileChunks[fileId] = {
             fileName: fileName,
@@ -389,19 +475,14 @@ class FileTransferApp {
         };
 
         this.addProgressItem(fileId, fileName, fileSize);
-        this.showToast(`开始接收文件: ${fileName}`, 'success');
+        this.showToast(`收到文件: ${fileName}`, 'success');
     }
 
     receiveFileChunk(data) {
-        const { fileId, chunk, chunkIndex, totalChunks, fileName, fileSize } = data;
+        const { fileId, chunk, chunkIndex, totalChunks } = data;
 
         if (!this.fileChunks[fileId]) {
-            this.fileChunks[fileId] = {
-                fileName: fileName,
-                fileSize: fileSize,
-                chunks: {},
-                receivedChunks: 0
-            };
+            return;
         }
 
         const fileData = this.fileChunks[fileId];
@@ -419,27 +500,34 @@ class FileTransferApp {
         this.updateProgress(fileId, progress, bytesReceived);
     }
 
-    renderIncomingFile(fileId, fileName, fileSize) {
-        this.elements.incomingFiles.innerHTML = `
-            <div class="incoming-file" id="incoming-${fileId}">
-                <div class="file-info">
-                    <span class="file-icon">${this.getFileIcon(fileName)}</span>
-                    <div class="file-details">
-                        <span class="file-name">${fileName}</span>
-                        <span class="file-size">${this.formatFileSize(fileSize)}</span>
-                    </div>
-                </div>
-                <div>
-                    <button class="accept-btn" onclick="app.acceptFile('${fileId}')">接收</button>
-                    <button class="decline-btn" onclick="app.declineFile('${fileId}')">拒绝</button>
-                </div>
-            </div>
-        `;
+    receiveMessage(data) {
+        const { content, senderName, time } = data;
+        this.peerNickname = senderName;
+        this.elements.peerNickname.textContent = senderName;
+        this.addMessage(content, senderName, 'received', time);
     }
 
-    acceptFile(fileId) {}
+    completeFileReceive(data) {
+        const fileId = data.fileId;
+        const fileSize = data.fileSize;
+        const fileData = this.fileChunks[fileId];
 
-    declineFile(fileId) {}
+        if (!fileData) return;
+
+        fileData.fileSize = fileSize;
+
+        setTimeout(() => {
+            const totalChunks = fileData.totalChunks || Math.ceil(fileSize / this.CHUNK_SIZE);
+
+            if (fileData.receivedChunks >= totalChunks) {
+                this.processReceivedChunk(fileId, 0);
+            } else {
+                setTimeout(() => {
+                    this.processReceivedChunk(fileId, 0);
+                }, 200);
+            }
+        }, 300);
+    }
 
     processReceivedChunk(fileId, chunkIndex) {
         const fileData = this.fileChunks[fileId];
@@ -466,44 +554,22 @@ class FileTransferApp {
 
         URL.revokeObjectURL(url);
 
-        this.updateProgress(fileId, 100, fileData.fileSize, '下载完成');
+        this.updateProgress(fileId, 100, fileData.fileSize, '已下载');
         this.addToHistory('received', fileData.fileName, fileData.fileSize);
-        this.showToast(`文件 "${fileData.fileName}" 已下载`, 'success');
+        this.showToast(`已下载: ${fileData.fileName}`, 'success');
 
         delete this.fileChunks[fileId];
     }
 
-    completeFileReceive(data) {
-        const fileId = data.fileId;
-        const fileSize = data.fileSize;
-        const fileData = this.fileChunks[fileId];
-
-        if (!fileData) return;
-
-        fileData.fileSize = fileSize;
-
-        setTimeout(() => {
-            const totalChunks = fileData.totalChunks || Math.ceil(fileSize / this.CHUNK_SIZE);
-
-            if (fileData.receivedChunks >= totalChunks) {
-                this.processReceivedChunk(fileId, 0);
-            } else {
-                setTimeout(() => {
-                    this.processReceivedChunk(fileId, 0);
-                }, 200);
-            }
-        }, 300);
-    }
-
     addProgressItem(fileId, fileName, fileSize) {
-        this.elements.transferProgress.classList.remove('hidden');
+        document.querySelector('.progress-section').classList.remove('hidden');
 
         const progressItem = document.createElement('div');
         progressItem.className = 'progress-item';
         progressItem.id = 'progress-item-' + fileId;
         progressItem.innerHTML = `
             <div class="progress-header">
-                <span class="progress-name">${fileName}</span>
+                <span class="progress-name" title="${fileName}">${fileName}</span>
                 <span class="progress-status" id="progress-status-${fileId}">0%</span>
             </div>
             <div class="progress-bar-container">
@@ -593,34 +659,25 @@ class FileTransferApp {
 
     renderHistory() {
         if (this.transferHistory.length === 0) {
-            this.elements.transferHistory.innerHTML = '<p class="empty-tip">暂无传输记录</p>';
-            this.elements.clearHistory.classList.add('hidden');
+            this.elements.transferHistory.innerHTML = '<div class="empty-tip">暂无记录</div>';
             return;
         }
 
-        this.elements.clearHistory.classList.remove('hidden');
         this.elements.transferHistory.innerHTML = this.transferHistory.map(item => `
             <div class="history-item">
                 <div class="history-info">
                     <span class="history-type ${item.type}">${item.type === 'sent' ? '发送' : '接收'}</span>
-                    <span>${item.fileName}</span>
+                    <span class="history-name" title="${item.fileName}">${item.fileName}</span>
                 </div>
-                <span style="color: #999; font-size: 0.85rem;">${this.formatFileSize(item.fileSize)}</span>
+                <span class="history-size">${this.formatFileSize(item.fileSize)}</span>
             </div>
         `).join('');
-    }
-
-    clearHistory() {
-        this.transferHistory = [];
-        this.renderHistory();
-        this.showToast('传输历史已清空', 'success');
     }
 
     getFileIcon(fileName) {
         const ext = fileName.split('.').pop().toLowerCase();
         const icons = {
-            pdf: '📕',
-            doc: '📘', docx: '📘',
+            pdf: '📕', doc: '📘', docx: '📘',
             xls: '📗', xlsx: '📗',
             ppt: '📙', pptx: '📙',
             jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', webp: '🖼️',
@@ -640,7 +697,7 @@ class FileTransferApp {
         const k = 1024;
         const sizes = ['B', 'KB', 'MB', 'GB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
 
     showToast(message, type = '') {
