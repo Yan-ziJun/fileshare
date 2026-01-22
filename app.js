@@ -266,6 +266,9 @@ class FileTransferApp {
             return;
         }
 
+        this.elements.progressList.innerHTML = '';
+        this.fileChunks = {};
+
         this.filesToSend.forEach(file => {
             this.sendFile(file);
         });
@@ -370,15 +373,23 @@ class FileTransferApp {
     }
 
     receiveFileMeta(data) {
-        const { fileId, fileName, fileSize } = data;
+        const { fileId, fileName, fileSize, totalChunks } = data;
+
+        if (this.fileChunks[fileId]) {
+            return;
+        }
+
         this.fileChunks[fileId] = {
             fileName: fileName,
             fileSize: fileSize,
+            totalChunks: totalChunks,
             chunks: {},
-            receivedChunks: 0
+            receivedChunks: 0,
+            autoStart: true
         };
 
-        this.renderIncomingFile(fileId, fileName, fileSize);
+        this.addProgressItem(fileId, fileName, fileSize);
+        this.showToast(`开始接收文件: ${fileName}`, 'success');
     }
 
     receiveFileChunk(data) {
@@ -426,25 +437,9 @@ class FileTransferApp {
         `;
     }
 
-    acceptFile(fileId) {
-        const fileData = this.fileChunks[fileId];
-        if (!fileData) return;
+    acceptFile(fileId) {}
 
-        this.addProgressItem(fileId, fileData.fileName, fileData.fileSize);
-        document.getElementById('incoming-' + fileId).classList.add('hidden');
-
-        for (let i = 0; i < fileData.receivedChunks; i++) {
-            if (fileData.chunks[i]) {
-                this.processReceivedChunk(fileId, i);
-            }
-        }
-    }
-
-    declineFile(fileId) {
-        delete this.fileChunks[fileId];
-        document.getElementById('incoming-' + fileId).remove();
-        this.elements.incomingFiles.innerHTML = '<p class="empty-tip">暂无接收文件</p>';
-    }
+    declineFile(fileId) {}
 
     processReceivedChunk(fileId, chunkIndex) {
         const fileData = this.fileChunks[fileId];
@@ -487,17 +482,17 @@ class FileTransferApp {
 
         fileData.fileSize = fileSize;
 
-        const checkAndDownload = () => {
-            const totalChunks = Math.ceil(fileSize / this.CHUNK_SIZE);
+        setTimeout(() => {
+            const totalChunks = fileData.totalChunks || Math.ceil(fileSize / this.CHUNK_SIZE);
 
             if (fileData.receivedChunks >= totalChunks) {
                 this.processReceivedChunk(fileId, 0);
             } else {
-                setTimeout(checkAndDownload, 100);
+                setTimeout(() => {
+                    this.processReceivedChunk(fileId, 0);
+                }, 200);
             }
-        };
-
-        checkAndDownload();
+        }, 300);
     }
 
     addProgressItem(fileId, fileName, fileSize) {
@@ -653,9 +648,16 @@ class FileTransferApp {
         this.elements.toast.className = 'toast ' + type;
         this.elements.toast.classList.remove('hidden');
 
+        requestAnimationFrame(() => {
+            this.elements.toast.classList.add('show');
+        });
+
         setTimeout(() => {
-            this.elements.toast.classList.add('hidden');
-        }, 3000);
+            this.elements.toast.classList.remove('show');
+            setTimeout(() => {
+                this.elements.toast.classList.add('hidden');
+            }, 400);
+        }, 2800);
     }
 }
 
