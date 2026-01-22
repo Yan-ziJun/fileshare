@@ -266,6 +266,21 @@ class FileTransferApp {
         this.showToast(`${nickname} 加入了房间`, 'success');
     }
 
+    broadcastNewDeviceImmediate(deviceId, nickname) {
+        const notifyMessage = {
+            type: 'new-device',
+            deviceId: deviceId,
+            nickname: nickname,
+            existingDevices: []
+        };
+
+        this.connections.forEach(conn => {
+            if (conn.open && conn.peer !== deviceId) {
+                conn.send(notifyMessage);
+            }
+        });
+    }
+
     broadcastNewDevice(deviceId, nickname) {
         const otherDeviceIds = Object.keys(this.devices).filter(id => id !== deviceId && id !== this.peerId);
 
@@ -484,6 +499,7 @@ class FileTransferApp {
                         joinedAt: Date.now()
                     };
                     this.renderDevicesList();
+                    this.broadcastNewDeviceImmediate(conn.peer, nicknameFromMeta);
                 }
                 const otherDevicesCount = Object.keys(this.devices).length - 1;
                 if (otherDevicesCount > 0) {
@@ -524,6 +540,9 @@ class FileTransferApp {
 
                 if (wasNewDevice) {
                     this.showToast(`${data.nickname} 加入了房间`, 'success');
+                    if (this.isHost) {
+                        setTimeout(() => this.broadcastNewDevice(conn.peer, data.nickname), 500);
+                    }
                 }
             } else if (data.type === 'new-device') {
                 this.handleNewDevice(data);
