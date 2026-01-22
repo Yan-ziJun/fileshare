@@ -453,12 +453,15 @@ class FileTransferApp {
             }
 
             if (this.isHost && conn.peer !== this.peerId) {
+                console.log('[Host] 收到连接:', conn.peer, '| metadata:', conn.metadata);
+                const nicknameFromMeta = conn.metadata?.nickname || '匿名';
                 if (!this.devices[conn.peer]) {
                     this.devices[conn.peer] = {
                         id: conn.peer,
-                        nickname: conn.metadata?.nickname || '匿名',
+                        nickname: nicknameFromMeta,
                         joinedAt: Date.now()
                     };
+                    console.log('[Host] 添加设备，昵称:', nicknameFromMeta);
                     this.renderDevicesList();
                 }
                 const otherDevicesCount = Object.keys(this.devices).length - 1;
@@ -481,6 +484,7 @@ class FileTransferApp {
 
         conn.on('data', (data) => {
             if (data.type === 'nickname') {
+                console.log('[Host] 收到 nickname 消息:', data.nickname, 'from:', conn.peer);
                 this.pendingConnections.delete(conn.peer);
 
                 const wasNewDevice = !this.devices[conn.peer];
@@ -489,6 +493,7 @@ class FileTransferApp {
                     nickname: data.nickname,
                     joinedAt: this.devices[conn.peer]?.joinedAt || Date.now()
                 };
+                console.log('[Host] 更新设备昵称为:', data.nickname);
                 this.renderDevicesList();
                 this.refreshTargetDeviceLists();
 
@@ -500,6 +505,8 @@ class FileTransferApp {
                 if (wasNewDevice) {
                     this.showToast(`${data.nickname} 加入了房间`, 'success');
                 }
+            } else if (data.type === 'new-device') {
+                this.handleNewDevice(data);
             } else {
                 this.handleData(data, conn);
             }
