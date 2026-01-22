@@ -456,7 +456,7 @@ class FileTransferApp {
                 if (!this.devices[conn.peer]) {
                     this.devices[conn.peer] = {
                         id: conn.peer,
-                        nickname: '匿名',
+                        nickname: conn.metadata?.nickname || '匿名',
                         joinedAt: Date.now()
                     };
                     this.renderDevicesList();
