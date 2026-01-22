@@ -412,7 +412,29 @@ class FileTransferApp {
 
         this.peer.on('disconnected', () => {
             this.updateConnectionStatus('waiting', '连接已断开');
+            this.stopHeartbeat();
         });
+
+        this.heartbeatInterval = null;
+    }
+
+    startHeartbeat() {
+        this.stopHeartbeat();
+        this.heartbeatInterval = setInterval(() => {
+            const openConnections = this.connections.filter(c => c.open);
+            openConnections.forEach(conn => {
+                if (conn.peer !== this.peerId) {
+                    conn.send({ type: 'heartbeat', time: Date.now() });
+                }
+            });
+        }, 10000);
+    }
+
+    stopHeartbeat() {
+        if (this.heartbeatInterval) {
+            clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = null;
+        }
     }
 
     connectToRoom(roomId) {
@@ -450,10 +472,10 @@ class FileTransferApp {
                 } else {
                     this.updateConnectionStatus('connected', '已连接');
                 }
+                this.connectToAllDevices();
             }
 
             if (this.isHost && conn.peer !== this.peerId) {
-                console.log('[Host] 收到连接:', conn.peer, '| metadata:', conn.metadata);
                 const nicknameFromMeta = conn.metadata?.nickname || '匿名';
                 if (!this.devices[conn.peer]) {
                     this.devices[conn.peer] = {
@@ -461,7 +483,6 @@ class FileTransferApp {
                         nickname: nicknameFromMeta,
                         joinedAt: Date.now()
                     };
-                    console.log('[Host] 添加设备，昵称:', nicknameFromMeta);
                     this.renderDevicesList();
                 }
                 const otherDevicesCount = Object.keys(this.devices).length - 1;
@@ -471,6 +492,7 @@ class FileTransferApp {
             }
 
             this.sendNickname(conn);
+            this.startHeartbeat();
 
             setTimeout(() => {
                 if (this.pendingConnections.has(conn.peer)) {
@@ -484,7 +506,6 @@ class FileTransferApp {
 
         conn.on('data', (data) => {
             if (data.type === 'nickname') {
-                console.log('[Host] 收到 nickname 消息:', data.nickname, 'from:', conn.peer);
                 this.pendingConnections.delete(conn.peer);
 
                 const wasNewDevice = !this.devices[conn.peer];
@@ -493,7 +514,6 @@ class FileTransferApp {
                     nickname: data.nickname,
                     joinedAt: this.devices[conn.peer]?.joinedAt || Date.now()
                 };
-                console.log('[Host] 更新设备昵称为:', data.nickname);
                 this.renderDevicesList();
                 this.refreshTargetDeviceLists();
 
@@ -515,6 +535,10 @@ class FileTransferApp {
         conn.on('close', () => {
             this.pendingConnections.delete(conn.peer);
             this.removeDevice(conn.peer);
+            const openConnections = this.connections.filter(c => c.open && c.peer !== conn.peer);
+            if (openConnections.length === 0) {
+                this.stopHeartbeat();
+            }
         });
 
         conn.on('error', (err) => {
@@ -832,6 +856,12 @@ class FileTransferApp {
         const msgObj = { content, sender, type, time };
         this.messages.push(msgObj);
         this.renderMessages();
+        this.scrollToBottom();
+    }
+
+    scrollToBottom() {
+        const messagesList = this.elements.messagesList;
+        messagesList.scrollTop = messagesList.scrollHeight;
     }
 
     renderMessages() {
@@ -855,7 +885,9 @@ class FileTransferApp {
     }
 
     handleData(data, conn = null) {
-        if (data.type === 'new-device') {
+        if (data.type === 'heartbeat') {
+            return;
+        } else if (data.type === 'new-device') {
             this.handleNewDevice(data);
         } else if (data.type === 'file-meta') {
             this.receiveFileMeta(data);
@@ -891,17 +923,14 @@ class FileTransferApp {
                         nickname: dev.nickname,
                         joinedAt: Date.now()
                     };
-                    if (!this.connections.some(c => c.peer === dev.deviceId)) {
-                        this.connectToDevice(dev.deviceId);
-                    }
                 }
             });
             this.renderDevicesList();
             this.refreshTargetDeviceLists();
         }
 
-        if (!this.connections.some(c => c.peer === deviceId)) {
-            this.connectToDevice(deviceId);
+        if (!this.isHost) {
+            this.connectToAllDevices();
         }
     }
 
@@ -916,6 +945,9 @@ class FileTransferApp {
 
             conn.on('open', () => {
                 this.sendNickname(conn);
+                if (!this.isHost) {
+                    this.connectToAllDevices();
+                }
             });
 
             conn.on('data', (data) => {
@@ -939,6 +971,8 @@ class FileTransferApp {
                     } else {
                         this.renderDevicesList();
                     }
+                } else if (data.type === 'new-device') {
+                    this.handleNewDevice(data);
                 } else {
                     this.handleData(data, conn);
                 }
@@ -953,6 +987,16 @@ class FileTransferApp {
                 console.error('Connection error:', err);
             });
         }
+    }
+
+    connectToAllDevices() {
+        Object.keys(this.devices).forEach(deviceId => {
+            if (deviceId !== this.peerId) {
+                if (!this.connections.some(c => c.peer === deviceId && c.open)) {
+                    this.connectToDevice(deviceId);
+                }
+            }
+        });
     }
 
     receiveFileMeta(data) {
