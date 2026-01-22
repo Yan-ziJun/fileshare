@@ -209,9 +209,8 @@ class FileTransferApp {
         this.elements.createRoomBtn.classList.add('hidden');
         this.elements.joinRoomBtn.classList.add('hidden');
 
+        this.updateConnectionStatus('waiting', '等待连接');
         this.initPeer(this.roomId);
-        this.addMyDevice();
-        this.showToast('房间创建成功', 'success');
     }
 
     showJoinForm() {
@@ -232,8 +231,8 @@ class FileTransferApp {
         this.elements.roomDisplay.classList.add('show');
         this.elements.joinForm.classList.remove('show');
 
+        this.updateConnectionStatus('waiting', '正在连接...');
         this.initPeer();
-        this.showToast('正在连接...', 'success');
     }
 
     addMyDevice() {
@@ -258,7 +257,26 @@ class FileTransferApp {
         if (otherDevicesCount > 0) {
             this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
         }
+
+        if (this.isHost) {
+            this.broadcastNewDevice(deviceId, nickname);
+        }
+
         this.showToast(`${nickname} 加入了房间`, 'success');
+    }
+
+    broadcastNewDevice(deviceId, nickname) {
+        const otherDeviceIds = Object.keys(this.devices).filter(id => id !== deviceId && id !== this.peerId);
+
+        this.broadcast({
+            type: 'new-device',
+            deviceId: deviceId,
+            nickname: nickname,
+            existingDevices: otherDeviceIds.map(id => ({
+                deviceId: id,
+                nickname: this.devices[id]?.nickname || '匿名'
+            }))
+        });
     }
 
     removeDevice(deviceId) {
@@ -336,11 +354,23 @@ class FileTransferApp {
 
         this.peer.on('open', (id) => {
             this.peerId = id;
-            this.updateConnectionStatus('waiting', '等待连接...');
 
             if (this.isHost) {
-                this.addMyDevice();
+                this.devices[this.peerId] = {
+                    id: this.peerId,
+                    nickname: this.nickname,
+                    joinedAt: Date.now()
+                };
+                this.renderDevicesList();
+                this.updateConnectionStatus('waiting', '等待连接');
+                this.showToast('房间创建成功', 'success');
             } else {
+                this.devices[this.peerId] = {
+                    id: this.peerId,
+                    nickname: this.nickname,
+                    joinedAt: Date.now()
+                };
+                this.renderDevicesList();
                 setTimeout(() => this.connectToRoom(this.roomId), 500);
             }
         });
@@ -493,8 +523,10 @@ class FileTransferApp {
     }
 
     onPeerConnected(deviceId) {
-        const count = this.connections.length;
-        this.updateConnectionStatus('connected', `${count} 个设备已连接`);
+        const otherDevicesCount = Object.keys(this.devices).length - 1;
+        if (otherDevicesCount > 0) {
+            this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+        }
     }
 
     updateConnectionStatus(status, message) {
@@ -733,7 +765,9 @@ class FileTransferApp {
     }
 
     handleData(data, conn = null) {
-        if (data.type === 'file-meta') {
+        if (data.type === 'new-device') {
+            this.handleNewDevice(data);
+        } else if (data.type === 'file-meta') {
             this.receiveFileMeta(data);
         } else if (data.type === 'file-chunk') {
             this.receiveFileChunk(data);
@@ -741,6 +775,90 @@ class FileTransferApp {
             this.completeFileReceive(data);
         } else if (data.type === 'message') {
             this.receiveMessage(data);
+        }
+    }
+
+    handleNewDevice(data) {
+        const { deviceId, nickname, existingDevices } = data;
+
+        if (deviceId === this.peerId) return;
+
+        if (!this.devices[deviceId]) {
+            this.devices[deviceId] = {
+                id: deviceId,
+                nickname: nickname,
+                joinedAt: Date.now()
+            };
+            this.renderDevicesList();
+            this.refreshTargetDeviceLists();
+        }
+
+        if (existingDevices && Array.isArray(existingDevices)) {
+            existingDevices.forEach(dev => {
+                if (dev.deviceId !== this.peerId && !this.devices[dev.deviceId]) {
+                    this.devices[dev.deviceId] = {
+                        id: dev.deviceId,
+                        nickname: dev.nickname,
+                        joinedAt: Date.now()
+                    };
+                    if (!this.connections.some(c => c.peer === dev.deviceId)) {
+                        this.connectToDevice(dev.deviceId);
+                    }
+                }
+            });
+        }
+
+        if (!this.connections.some(c => c.peer === deviceId)) {
+            this.connectToDevice(deviceId);
+        }
+    }
+
+    connectToDevice(deviceId) {
+        if (this.peer && deviceId !== this.peerId) {
+            const conn = this.peer.connect(deviceId, {
+                reliable: true
+            });
+
+            this.connections.push(conn);
+
+            conn.on('open', () => {
+                this.sendNickname(conn);
+            });
+
+            conn.on('data', (data) => {
+                if (data.type === 'nickname') {
+                    this.pendingConnections.delete(conn.peer);
+                    const isNewDevice = !this.devices[conn.peer];
+                    this.devices[conn.peer] = {
+                        id: conn.peer,
+                        nickname: data.nickname,
+                        joinedAt: this.devices[conn.peer]?.joinedAt || Date.now()
+                    };
+                    if (isNewDevice) {
+                        this.onPeerConnected(conn.peer);
+                        this.renderDevicesList();
+                        this.refreshTargetDeviceLists();
+                        const otherDevicesCount = Object.keys(this.devices).length - 1;
+                        if (otherDevicesCount > 0) {
+                            this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+                        }
+                        this.showToast(`${data.nickname} 加入了房间`, 'success');
+                    } else {
+                        this.renderDevicesList();
+                    }
+                } else {
+                    this.handleData(data, conn);
+                }
+            });
+
+            conn.on('close', () => {
+                this.pendingConnections.delete(conn.peer);
+                this.removeDevice(conn.peer);
+            });
+
+            conn.on('error', (err) => {
+                console.error('Connection error:', err);
+            });
         }
     }
 
