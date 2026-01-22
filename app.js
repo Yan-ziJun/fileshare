@@ -253,6 +253,11 @@ class FileTransferApp {
         };
         this.renderDevicesList();
         this.refreshTargetDeviceLists();
+
+        const otherDevicesCount = Object.keys(this.devices).length - 1;
+        if (otherDevicesCount > 0) {
+            this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+        }
         this.showToast(`${nickname} 加入了房间`, 'success');
     }
 
@@ -267,11 +272,11 @@ class FileTransferApp {
 
         this.connections = this.connections.filter(c => c.peer !== deviceId);
 
-        if (Object.keys(this.devices).length <= 1) {
+        const otherDevicesCount = Object.keys(this.devices).length - 1;
+        if (otherDevicesCount <= 0) {
             this.updateConnectionStatus('waiting', '等待连接');
         } else {
-            const count = Object.keys(this.devices).length - 1;
-            this.updateConnectionStatus('connected', `${count} 个设备已连接`);
+            this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
         }
     }
 
@@ -288,9 +293,9 @@ class FileTransferApp {
     }
 
     renderDevicesList() {
-        const deviceIds = Object.keys(this.devices);
+        const deviceIds = Object.keys(this.devices).filter(id => id !== this.peerId);
         
-        if (deviceIds.length <= 1) {
+        if (deviceIds.length === 0) {
             this.elements.devicesList.classList.add('hidden');
             return;
         }
@@ -300,7 +305,6 @@ class FileTransferApp {
         const icons = ['💻', '📱', '📱', '📱', '📱', '💻', '📱', '💻'];
         
         this.elements.devicesListContent.innerHTML = deviceIds.map((id, index) => {
-            if (id === this.peerId) return '';
             const device = this.devices[id];
             const icon = device.nickname.includes('手机') ? '📱' : 
                          device.nickname.includes('电脑') ? '💻' : 
@@ -383,6 +387,22 @@ class FileTransferApp {
 
         conn.on('open', () => {
             this.pendingConnections.add(conn.peer);
+
+            if (!this.isHost && this.roomId && conn.peer === this.roomId) {
+                this.devices[this.roomId] = {
+                    id: this.roomId,
+                    nickname: '房主',
+                    joinedAt: Date.now()
+                };
+                this.renderDevicesList();
+                const otherDevicesCount = Object.keys(this.devices).length - 1;
+                if (otherDevicesCount > 0) {
+                    this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+                } else {
+                    this.updateConnectionStatus('connected', '已连接');
+                }
+            }
+
             setTimeout(() => {
                 if (this.pendingConnections.has(conn.peer)) {
                     this.pendingConnections.delete(conn.peer);
@@ -397,16 +417,24 @@ class FileTransferApp {
         conn.on('data', (data) => {
             if (data.type === 'nickname') {
                 this.pendingConnections.delete(conn.peer);
-                if (!this.devices[conn.peer]) {
-                    this.onPeerConnected(conn.peer);
-                }
+                const isNewDevice = !this.devices[conn.peer];
                 this.devices[conn.peer] = {
                     id: conn.peer,
                     nickname: data.nickname,
-                    joinedAt: Date.now()
+                    joinedAt: this.devices[conn.peer]?.joinedAt || Date.now()
                 };
-                this.renderDevicesList();
-                this.showToast(`${data.nickname} 加入了房间`, 'success');
+                if (isNewDevice) {
+                    this.onPeerConnected(conn.peer);
+                    this.renderDevicesList();
+                    this.refreshTargetDeviceLists();
+                    const otherDevicesCount = Object.keys(this.devices).length - 1;
+                    if (otherDevicesCount > 0) {
+                        this.updateConnectionStatus('connected', `${otherDevicesCount} 个设备已连接`);
+                    }
+                    this.showToast(`${data.nickname} 加入了房间`, 'success');
+                } else {
+                    this.renderDevicesList();
+                }
             } else {
                 this.handleData(data, conn);
             }
