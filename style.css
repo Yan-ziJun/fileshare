@@ -12,7 +12,7 @@ html {
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Helvetica Neue', sans-serif;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    background: linear-gradient(135deg, #2c3e50 0%, #1a2a3a 50%, #0f1b2c 100%);
     min-height: 100vh;
     color: #ffffff;
     padding: 40px 20px 60px;
@@ -116,10 +116,330 @@ header .user-count {
     display: none;
 }
 
+.tab-nav {
+    position: sticky;
+    top: 0;
+    background: rgba(26, 26, 46, 0.95);
+    backdrop-filter: blur(10px);
+    z-index: 100;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tab-nav-inner {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    max-width: 800px;
+    margin: 0 auto;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.tab-nav-inner::-webkit-scrollbar {
+    display: none;
+}
+
+.tab-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.tab-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.tab-item.active {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.tab-icon {
+    font-size: 16px;
+}
+
+.tab-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.tab-item.active .tab-text {
+    color: white;
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.page-header {
+    margin-bottom: 20px;
+}
+
+.page-header h2 {
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.welcome-page {
+    text-align: center;
+    padding: 40px 20px;
+}
+
+.welcome-logo {
+    font-size: 72px;
+    margin-bottom: 20px;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.welcome-title {
+    font-size: 32px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+}
+
+.welcome-subtitle {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-bottom: 40px;
+}
+
+.welcome-features {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-bottom: 40px;
+    flex-wrap: wrap;
+}
+
+.feature-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 24px 20px;
+    width: 140px;
+    text-align: center;
+}
+
+.feature-icon {
+    font-size: 36px;
+    margin-bottom: 12px;
+}
+
+.feature-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 6px;
+}
+
+.feature-desc {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.4;
+}
+
+.welcome-action {
+    margin-bottom: 40px;
+}
+
+.btn-large {
+    padding: 16px 48px;
+    font-size: 16px;
+    border-radius: 16px;
+}
+
+.welcome-usage {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 24px;
+    text-align: left;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.welcome-usage h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 16px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.welcome-usage ol {
+    padding-left: 20px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+    line-height: 2;
+}
+
+.settings-section {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 16px;
+    padding: 24px;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 8px;
+}
+
+.room-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.room-actions .btn {
+    flex: 1;
+}
+
+.room-section {
+    text-align: center;
+}
+
+.room-display {
+    display: inline-block;
+    background: rgba(102, 126, 234, 0.15);
+    border-radius: 16px;
+    padding: 20px 40px;
+    margin-bottom: 16px;
+    width: 100%;
+    text-align: center;
+}
+
+.room-label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+}
+
+.room-display .room-id {
+    font-family: 'SF Mono', 'Monaco', monospace;
+    font-size: 32px;
+    font-weight: 700;
+    color: #667eea;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+}
+
+.room-display .status {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.room-display .status.waiting {
+    color: #ffcc00;
+}
+
+.room-display .status.connected {
+    color: #34c759;
+}
+
+.devices-section {
+    padding: 8px 0;
+}
+
+.devices-section .devices-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.devices-section .devices-list-content {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.devices-section .device-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    font-size: 14px;
+}
+
+.devices-section .device-icon {
+    font-size: 18px;
+}
+
+.devices-section .device-name {
+    font-weight: 500;
+}
+
+.devices-section .device-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #34c759;
+}
+
 .container {
     width: 100%;
-    max-width: 420px;
+    max-width: 600px;
     margin: 0 auto;
+    padding: 20px 16px;
+}
+
+@media (max-width: 767px) {
+    .container {
+        max-width: 100%;
+        padding: 16px;
+    }
 }
 
 .section {
@@ -657,11 +977,15 @@ header .user-count {
 }
 
 .messages-list {
-    max-height: 120px;
+    max-height: 280px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 8px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    min-height: 150px;
 }
 
 .messages-list::-webkit-scrollbar {
@@ -864,28 +1188,36 @@ header .user-count {
 
 @media (min-width: 768px) and (max-width: 1440px) {
     body {
-        padding: 50px 40px 60px;
+        padding: 30px 20px 50px;
     }
 
     header {
-        margin-bottom: 40px;
+        margin-bottom: 0;
     }
 
     header h1 {
-        font-size: 42px;
+        font-size: 32px;
     }
 
     header .subtitle {
-        font-size: 17px;
+        font-size: 15px;
         margin-top: 8px;
     }
 
     .container {
-        max-width: 540px;
+        max-width: 650px;
     }
 
     .section {
-        margin-bottom: 28px;
+        margin-bottom: 24px;
+    }
+
+    .tab-nav {
+        padding: 14px 20px;
+    }
+
+    .tab-item {
+        padding: 10px 20px;
     }
 
     .section-title {
@@ -1129,17 +1461,157 @@ header .user-count {
     }
 }
 
-@media (max-width: 480px) {
+@media (min-width: 1441px) {
     body {
-        padding: 30px 16px 40px;
+        padding: 40px 20px 60px;
     }
 
-    header {
-        margin-bottom: 24px;
+    .container {
+        max-width: 700px;
     }
 
     header h1 {
-        font-size: 28px;
+        font-size: 36px;
+    }
+
+    .tab-nav {
+        padding: 16px 20px;
+    }
+
+    .tab-item {
+        padding: 12px 24px;
+    }
+
+    .tab-icon {
+        font-size: 18px;
+    }
+
+    .tab-text {
+        font-size: 15px;
+    }
+
+    .section {
+        margin-bottom: 32px;
+    }
+
+    .file-drop-zone {
+        min-height: 200px;
+        padding: 50px 40px;
+    }
+
+    .file-drop-zone .icon {
+        font-size: 56px;
+        margin-bottom: 20px;
+    }
+
+    .file-drop-zone .text {
+        font-size: 20px;
+    }
+
+    .file-drop-zone .subtext {
+        font-size: 16px;
+        margin-top: 10px;
+    }
+
+    .file-item {
+        padding: 20px 24px;
+        border-radius: 18px;
+    }
+
+    .file-icon {
+        font-size: 36px;
+    }
+
+    .file-name {
+        font-size: 17px;
+    }
+
+    .file-size {
+        font-size: 15px;
+    }
+
+    .file-remove {
+        width: 36px;
+        height: 36px;
+        font-size: 22px;
+    }
+
+    .section-title {
+        font-size: 15px;
+        margin-bottom: 16px;
+    }
+
+    .message-input-area textarea {
+        padding: 16px 20px;
+        font-size: 16px;
+        min-height: 60px;
+        border-radius: 16px;
+    }
+
+    .message-input-area .btn {
+        padding: 16px 32px;
+        border-radius: 16px;
+        font-size: 16px;
+    }
+
+    .message-item {
+        padding: 16px 20px;
+        border-radius: 16px;
+        margin-bottom: 10px;
+    }
+
+    .message-item.sent {
+        margin-left: 28px;
+    }
+
+    .message-item.received {
+        margin-right: 28px;
+    }
+
+    .progress-item {
+        padding: 20px;
+        border-radius: 18px;
+    }
+
+    .progress-name {
+        font-size: 16px;
+    }
+
+    .progress-status {
+        font-size: 19px;
+    }
+
+    .history-item {
+        padding: 16px 20px;
+        border-radius: 14px;
+        margin-bottom: 10px;
+    }
+
+    .history-name {
+        font-size: 16px;
+    }
+
+    .toast {
+        padding: 18px 36px;
+        font-size: 17px;
+        bottom: 60px;
+        border-radius: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    body {
+        padding: 0 0 30px;
+    }
+
+    header {
+        margin-bottom: 0;
+        padding: 20px 16px;
+        text-align: center;
+    }
+
+    header h1 {
+        font-size: 24px;
     }
 
     header .subtitle {
@@ -1159,8 +1631,52 @@ header .user-count {
         padding: 3px 10px;
     }
 
+    .tab-nav {
+        padding: 8px 12px;
+    }
+
+    .tab-nav-inner {
+        justify-content: flex-start;
+        padding-bottom: 4px;
+    }
+
+    .tab-item {
+        padding: 8px 12px;
+    }
+
+    .tab-icon {
+        font-size: 14px;
+    }
+
+    .tab-text {
+        font-size: 12px;
+    }
+
     .container {
         max-width: 100%;
+        padding: 16px;
+    }
+
+    .welcome-page {
+        padding: 20px 16px;
+    }
+
+    .welcome-logo {
+        font-size: 56px;
+    }
+
+    .welcome-title {
+        font-size: 24px;
+    }
+
+    .welcome-features {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .feature-item {
+        width: 100%;
+        max-width: 200px;
     }
 
     .file-drop-zone {
@@ -1174,6 +1690,22 @@ header .user-count {
 
     .file-drop-zone .text {
         font-size: 14px;
+    }
+
+    .page-header h2 {
+        font-size: 18px;
+    }
+
+    .settings-section {
+        padding: 16px;
+    }
+
+    .room-actions {
+        flex-direction: column;
+    }
+
+    .messages-list {
+        max-height: 300px;
     }
 
     .section {

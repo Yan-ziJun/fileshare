@@ -27,12 +27,13 @@ class FileTransferApp {
             nicknameInput: document.getElementById('nicknameInput'),
             createRoomBtn: document.getElementById('createRoomBtn'),
             joinRoomBtn: document.getElementById('joinRoomBtn'),
+            confirmJoinBtn: document.getElementById('confirmJoinBtn'),
             roomDisplay: document.getElementById('roomDisplay'),
             roomId: document.getElementById('roomId'),
             connectionStatus: document.getElementById('connectionStatus'),
             joinForm: document.getElementById('joinForm'),
             roomIdInput: document.getElementById('roomIdInput'),
-            devicesList: document.getElementById('devicesList'),
+            devicesList: document.getElementById('devicesListContent'),
             devicesListContent: document.getElementById('devicesListContent'),
             peerNickname: document.getElementById('peerNickname'),
             fileTargetRoom: document.querySelector('input[name="fileTarget"][value="room"]'),
@@ -59,6 +60,7 @@ class FileTransferApp {
     initEventListeners() {
         this.elements.createRoomBtn.addEventListener('click', () => this.createRoom());
         this.elements.joinRoomBtn.addEventListener('click', () => this.showJoinForm());
+        this.elements.confirmJoinBtn.addEventListener('click', () => this.joinRoom());
         this.elements.roomIdInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.joinRoom();
         });
@@ -123,6 +125,51 @@ class FileTransferApp {
                 this.sendMessage();
             }
         });
+
+        document.querySelectorAll('.panel-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const panel = header.parentElement;
+                panel.classList.toggle('expanded');
+            });
+        });
+
+        document.querySelectorAll('.panel').forEach(panel => {
+            panel.classList.add('expanded');
+        });
+
+        document.querySelectorAll('.tab-item').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const tabName = tab.dataset.tab;
+                this.switchTab(tabName);
+            });
+        });
+
+        const startBtn = document.getElementById('startBtn');
+        if (startBtn) {
+            startBtn.addEventListener('click', () => {
+                this.switchTab('settings');
+            });
+        }
+    }
+
+    switchTab(tabName) {
+        document.querySelectorAll('.tab-item').forEach(item => {
+            item.classList.remove('active');
+        });
+        
+        document.querySelectorAll('.tab-content').forEach(content => {
+            content.classList.remove('active');
+        });
+
+        const activeTab = document.querySelector(`.tab-item[data-tab="${tabName}"]`);
+        const activeContent = document.getElementById(`${tabName}-content`);
+        
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
+        if (activeContent) {
+            activeContent.classList.add('active');
+        }
     }
 
     loadNickname() {
