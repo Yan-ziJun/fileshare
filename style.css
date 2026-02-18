@@ -436,9 +436,141 @@ header .user-count {
 }
 
 @media (max-width: 767px) {
+    body {
+        padding: 0 0 20px;
+    }
+
+    header {
+        padding: 16px;
+        margin-bottom: 0;
+    }
+
+    header h1 {
+        font-size: 22px;
+    }
+
+    .tab-nav {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(26, 26, 46, 0.98);
+        padding: 10px 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .tab-nav-inner {
+        display: flex;
+        gap: 6px;
+        justify-content: flex-start;
+    }
+
+    .tab-item {
+        padding: 8px 14px;
+        font-size: 13px;
+    }
+
+    .tab-icon {
+        font-size: 14px;
+    }
+
+    .tab-text {
+        font-size: 12px;
+    }
+
     .container {
         max-width: 100%;
         padding: 16px;
+    }
+
+    .page-header h2 {
+        font-size: 18px;
+    }
+
+    .settings-section {
+        padding: 16px;
+    }
+
+    .room-display {
+        padding: 16px 24px;
+    }
+
+    .room-display .room-id {
+        font-size: 24px;
+    }
+
+    .devices-section .device-item {
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+    }
+
+    .nickname-input {
+        padding: 12px 14px;
+        font-size: 14px;
+    }
+
+    .room-actions {
+        flex-direction: column;
+    }
+
+    .room-actions .btn {
+        width: 100%;
+    }
+
+    .join-form {
+        padding: 14px;
+    }
+
+    .file-drop-zone {
+        padding: 24px 16px;
+        min-height: 140px;
+    }
+
+    .file-drop-zone .icon {
+        font-size: 36px;
+    }
+
+    .file-drop-zone .text {
+        font-size: 14px;
+    }
+
+    .file-drop-zone .subtext {
+        font-size: 12px;
+    }
+
+    .messages-list {
+        max-height: 250px;
+        min-height: 120px;
+    }
+
+    .message-input-area {
+        flex-direction: column;
+    }
+
+    .message-input-area textarea {
+        width: 100%;
+    }
+
+    .message-input-area .btn {
+        width: 100%;
+        margin-top: 8px;
+    }
+
+    .send-target-selector {
+        padding: 12px;
+    }
+
+    .target-options {
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .target-option {
+        padding: 10px 12px;
     }
 }
 
