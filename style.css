@@ -549,8 +549,8 @@ header .user-count {
     }
 
     .messages-list {
-        max-height: 250px;
-        min-height: 120px;
+        max-height: 400px;
+        min-height: 200px;
     }
 
     .message-input-area {
@@ -1115,7 +1115,7 @@ header .user-count {
 }
 
 .messages-list {
-    max-height: 280px;
+    max-height: 450px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -1123,7 +1123,7 @@ header .user-count {
     padding: 12px;
     background: rgba(255, 255, 255, 0.03);
     border-radius: 12px;
-    min-height: 150px;
+    min-height: 250px;
 }
 
 .messages-list::-webkit-scrollbar {
