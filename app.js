@@ -50,6 +50,7 @@ class FileTransferApp {
             fileInput: document.getElementById('fileInput'),
             fileList: document.getElementById('fileList'),
             sendFilesBtn: document.getElementById('sendFilesBtn'),
+            clearProgressBtn: document.getElementById('clearProgressBtn'),
             messageInput: document.getElementById('messageInput'),
             sendMessageBtn: document.getElementById('sendMessageBtn'),
             messagesList: document.getElementById('messagesList'),
@@ -72,6 +73,7 @@ class FileTransferApp {
         });
         this.elements.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         this.elements.sendFilesBtn.addEventListener('click', () => this.sendFiles());
+        this.elements.clearProgressBtn.addEventListener('click', () => this.clearProgress());
         this.elements.sendMessageBtn.addEventListener('click', () => this.sendMessage());
 
         if (this.elements.fileTargetRoom) {
@@ -1339,6 +1341,12 @@ class FileTransferApp {
         if (this.fileChunks[fileId]) {
             this.fileChunks[fileId].cancelled = true;
         }
+    }
+
+    clearProgress() {
+        this.elements.progressList.innerHTML = '';
+        this.elements.progressList.parentElement.classList.add('hidden');
+        this.fileChunks = {};
     }
 
     updateProgress(fileId, percentage, currentSize, status = null) {
