@@ -67,6 +67,9 @@ class FileTransferApp {
         this.elements.roomIdInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.joinRoom();
         });
+        this.elements.roomIdInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
         this.elements.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         this.elements.sendFilesBtn.addEventListener('click', () => this.sendFiles());
         this.elements.sendMessageBtn.addEventListener('click', () => this.sendMessage());
@@ -273,11 +276,11 @@ class FileTransferApp {
     joinRoom() {
         const inputRoomId = this.elements.roomIdInput.value.trim();
         if (!inputRoomId) {
-            this.showToast('请输入房间号', 'error');
+            this.showToast('请输入房间号后4位', 'error');
             return;
         }
 
-        this.roomId = inputRoomId;
+        this.roomId = 'yan' + inputRoomId;
         this.isHost = false;
         this.elements.roomId.textContent = this.roomId;
         this.elements.roomDisplay.classList.add('show');
@@ -876,6 +879,16 @@ class FileTransferApp {
         let lastProgressTime = Date.now();
 
         const sendNext = () => {
+            if (this.fileChunks[fileId] && this.fileChunks[fileId].cancelled) {
+                const progressItem = document.getElementById('progress-item-' + fileId);
+                if (progressItem) {
+                    progressItem.remove();
+                }
+                delete this.fileChunks[fileId];
+                this.showToast('已取消发送', 'error');
+                return;
+            }
+
             if (currentChunk >= totalChunks) {
                 sendMethod({
                     type: 'file-complete',
@@ -1286,6 +1299,7 @@ class FileTransferApp {
                     <span id="progress-time-${fileId}" class="progress-time"></span>
                 </div>
             </div>
+            <button class="btn-cancel" onclick="app.cancelFile('${fileId}')">取消</button>
         `;
         this.elements.progressList.appendChild(progressItem);
 
@@ -1293,11 +1307,22 @@ class FileTransferApp {
             ...(this.fileChunks[fileId] || {}),
             startTime: Date.now(),
             lastBytes: 0,
-            fileSize: fileSize
+            fileSize: fileSize,
+            cancelled: false
         };
     }
 
+    cancelFile(fileId) {
+        if (this.fileChunks[fileId]) {
+            this.fileChunks[fileId].cancelled = true;
+        }
+    }
+
     updateProgress(fileId, percentage, currentSize, status = null) {
+        if (this.fileChunks[fileId] && this.fileChunks[fileId].cancelled) {
+            return;
+        }
+
         const progressBar = document.getElementById('progress-bar-' + fileId);
         const progressStatus = document.getElementById('progress-status-' + fileId);
         const progressCurrent = document.getElementById('progress-current-' + fileId);

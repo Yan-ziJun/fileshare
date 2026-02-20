@@ -1074,6 +1074,24 @@ header .user-count {
     padding: 14px;
     background: rgba(255, 255, 255, 0.06);
     border-radius: 14px;
+    position: relative;
+}
+
+.btn-cancel {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 4px 10px;
+    font-size: 12px;
+    background: rgba(255, 82, 82, 0.2);
+    color: #ff5252;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-cancel:hover {
+    background: rgba(255, 82, 82, 0.4);
 }
 
 .progress-header {
