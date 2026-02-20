@@ -310,6 +310,7 @@ class FileTransferApp {
 
         const oldRoomId = this.roomId;
         const oldIsHost = this.isHost;
+        const otherDevices = Object.keys(this.devices).filter(id => id !== this.peerId && id !== this.roomId);
 
         this.connections.forEach(conn => {
             if (conn.open) {
@@ -325,14 +326,13 @@ class FileTransferApp {
         };
         this.renderDevicesList();
 
+        this.roomId = oldRoomId;
+        this.isHost = oldIsHost;
+
         if (oldIsHost) {
-            this.roomId = oldRoomId;
-            this.isHost = true;
             this.updateConnectionStatus('waiting', '等待连接');
             this.initPeer(this.roomId);
         } else {
-            this.roomId = oldRoomId;
-            this.isHost = false;
             this.updateConnectionStatus('waiting', '正在重新连接...');
             this.initPeer();
         }
@@ -441,7 +441,7 @@ class FileTransferApp {
     }
 
     removeDevice(deviceId) {
-        if (this.devices[deviceId]) {
+        if (deviceId !== this.peerId && this.devices[deviceId]) {
             const nickname = this.devices[deviceId].nickname;
             delete this.devices[deviceId];
             this.renderDevicesList();
@@ -459,7 +459,7 @@ class FileTransferApp {
 
         this.connections = this.connections.filter(c => c.peer !== deviceId);
 
-        const otherDevicesCount = Object.keys(this.devices).length - 1;
+        const otherDevicesCount = Object.keys(this.devices).filter(id => id !== this.peerId && id !== this.roomId).length;
         if (otherDevicesCount <= 0) {
             this.updateConnectionStatus('waiting', '等待连接');
         } else {
@@ -1067,14 +1067,14 @@ class FileTransferApp {
         } else if (data.type === 'new-device') {
             this.handleNewDevice(data);
         } else if (data.type === 'device-left') {
-            if (this.devices[data.deviceId]) {
+            if (data.deviceId !== this.peerId && this.devices[data.deviceId]) {
                 delete this.devices[data.deviceId];
                 this.renderDevicesList();
                 this.refreshTargetDeviceLists();
                 this.showToast(`${data.nickname} 已离开`, 'success');
             }
             this.connections = this.connections.filter(c => c.peer !== data.deviceId);
-            const otherDevicesCount = Object.keys(this.devices).length - 1;
+            const otherDevicesCount = Object.keys(this.devices).filter(id => id !== this.peerId && id !== this.roomId).length;
             if (otherDevicesCount <= 0) {
                 this.updateConnectionStatus('waiting', '等待连接');
             } else {
