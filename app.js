@@ -1369,7 +1369,7 @@ class FileTransferApp {
 
   generateRoomId() {
     const num = Math.floor(1000 + Math.random() * 9000);
-    return 'fs-' + num;
+    return 'yan-' + num;
   }
 
   async createRoom() {
@@ -1397,7 +1397,7 @@ class FileTransferApp {
         };
         this.ui.renderDevicesList(this.devices, this.peerId, this.isHost);
         
-        const shareCode = this.roomId.replace(/^fs-/, '');
+        const shareCode = this.roomId.replace(/^yan-/, '');
         this.ui.elements.roomShare.style.display = 'inline-flex';
         this.ui.elements.roomShareCode.textContent = shareCode;
         
@@ -1425,7 +1425,7 @@ class FileTransferApp {
       return;
     }
 
-    const fullRoomId = 'fs-' + inputRoomId;
+    const fullRoomId = 'yan-' + inputRoomId;
     this.ui.updateConnectionStatus('waiting', '正在连接...');
     this.ui.showToast('正在连接，请稍候...', 'success');
 
