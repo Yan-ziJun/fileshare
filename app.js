@@ -432,6 +432,41 @@ class ConnectionManager {
     this.maxReconnectAttempts = 5;
     this.reconnectDelay = 2000;
     this.isReconnecting = false;
+    this.pendingPeer = null;
+  }
+
+  /**
+   * ICE 服务器配置（STUN + TURN）
+   * 用于 NAT 穿透，确保 P2P 连接在各种网络环境下都能工作
+   */
+  get iceServers() {
+    return [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'stun:stun2.l.google.com:19302' },
+      { urls: 'stun:stun3.l.google.com:19302' },
+      { urls: 'stun:stun4.l.google.com:19302' },
+      {
+        urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
+        username: 'webrtc',
+        credential: 'webrtc'
+      }
+    ];
+  }
+
+  /**
+   * PeerJS 信令服务器配置
+   * 使用官方默认信令服务器，同时配置 ICE 服务器用于 NAT 穿透
+   */
+  get peerConfig() {
+    return {
+      debug: 1,
+      config: {
+        iceServers: this.iceServers,
+        iceTransportPolicy: 'all',
+        sdpSemantics: 'unified-plan'
+      }
+    };
   }
 
   /**
@@ -443,43 +478,59 @@ class ConnectionManager {
         this.peer.destroy();
       }
 
-      const peerConfig = {
-        debug: 1
-      };
-
-      try {
-        this.peer = new Peer(customId, peerConfig);
-
-        this.peer.on('open', (id) => {
-          this.app.peerId = id;
-          this.reconnectAttempts = 0;
-          this.startHeartbeat();
-          resolve(id);
-        });
-
-        this.peer.on('connection', (conn) => {
-          this.handleNewConnection(conn);
-        });
-
-        this.peer.on('error', (err) => {
-          console.error('Peer error:', err);
-          this.handlePeerError(err);
-          reject(err);
-        });
-
-        this.peer.on('disconnected', () => {
-          console.log('Peer disconnected');
-          this.handleDisconnect();
-        });
-
-        this.peer.on('close', () => {
-          console.log('Peer closed');
-          this.stopHeartbeat();
-        });
-      } catch (error) {
-        console.error('Failed to init peer:', error);
-        reject(error);
+      if (this.pendingPeer) {
+        this.pendingPeer.destroy();
       }
+
+      const config = this.peerConfig;
+      this.pendingPeer = new Peer(customId, config);
+
+      this.pendingPeer.on('open', (id) => {
+        this.peer = this.pendingPeer;
+        this.pendingPeer = null;
+        this.app.peerId = id;
+        this.reconnectAttempts = 0;
+        this.startHeartbeat();
+        resolve(id);
+      });
+
+      this.pendingPeer.on('connection', (conn) => {
+        if (this.peer) {
+          this.handleNewConnection(conn);
+        }
+      });
+
+      this.pendingPeer.on('error', (err) => {
+        console.error('Peer error:', err);
+        const fatalTypes = ['unavailable-id', 'invalid-id', 'fatal-id-collision'];
+        if (fatalTypes.includes(err.type)) {
+            this.pendingPeer = null;
+            reject(err);
+        } else if (err.type === 'peer-unavailable') {
+            this.pendingPeer = null;
+            reject(new Error('房间不存在或对方已离线'));
+        } else {
+            console.warn('Peer init error (will retry via caller):', err.type);
+        }
+      });
+
+      this.pendingPeer.on('disconnected', () => {
+        console.log('Peer disconnected');
+        this.handleDisconnect();
+      });
+
+      this.pendingPeer.on('close', () => {
+        console.log('Peer closed');
+        this.stopHeartbeat();
+      });
+
+      setTimeout(() => {
+        if (!this.peer && this.pendingPeer) {
+          this.pendingPeer.destroy();
+          this.pendingPeer = null;
+          reject(new Error('连接超时，请检查网络后重试'));
+        }
+      }, 15000);
     });
   }
 
@@ -591,17 +642,26 @@ class ConnectionManager {
    * 处理 Peer 错误
    */
   handlePeerError(err) {
-    if (err.type === 'unavailable-id') {
-      this.app.showToast('房间号已被占用', 'error');
-      this.app.updateConnectionStatus('error', '房间号无效');
-    } else if (err.type === 'peer-unavailable') {
-      this.app.showToast('房间不存在', 'error');
-      this.app.updateConnectionStatus('error', '连接失败');
-    } else if (err.type === 'network') {
-      this.app.showToast('网络错误，尝试重连...', 'error');
+    const errorMap = {
+      'unavailable-id': { msg: '房间号已被占用，请尝试其他房间', status: 'error' },
+      'invalid-id': { msg: '房间号格式无效', status: 'error' },
+      'peer-unavailable': { msg: '房间不存在或对方已离线', status: 'error' },
+      'network': { msg: '网络异常，正在尝试重连...', status: 'reconnecting' },
+      'disconnected': { msg: '连接已断开', status: 'reconnecting' },
+      'server-error': { msg: '信令服务器错误，正在重试...', status: 'reconnecting' },
+      'signaling': { msg: '信令连接异常，正在重试...', status: 'reconnecting' },
+      'invalid-key': { msg: '密钥无效', status: 'error' },
+      'fatal-id-collision': { msg: 'ID 冲突，请稍后重试', status: 'error' }
+    };
+
+    const handler = errorMap[err.type] || { msg: `连接错误: ${err.type || err.message}`, status: 'error' };
+
+    this.app.showToast(handler.msg, handler.status === 'error' ? 'error' : 'success');
+    this.app.updateConnectionStatus(handler.status, handler.msg);
+
+    const retryableErrors = ['network', 'disconnected', 'server-error', 'signaling'];
+    if (retryableErrors.includes(err.type)) {
       this.attemptReconnect();
-    } else {
-      this.app.showToast('连接错误', 'error');
     }
   }
 
@@ -611,28 +671,30 @@ class ConnectionManager {
   handleDisconnect() {
     this.stopHeartbeat();
     if (this.app.roomId && !this.isReconnecting) {
+      this.app.showToast('连接断开，正在尝试重连...', 'success');
       this.attemptReconnect();
     }
   }
 
   /**
-   * 尝试重连
+   * 尝试重连（带指数退避和状态保持）
    */
   async attemptReconnect() {
     if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) {
-      if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-        this.app.showToast('重连失败，请手动重新连接', 'error');
-        this.app.disconnect();
+      if (this.reconnectAttempts >= this.maxReconnectAttempts && this.app.roomId) {
+        this.app.showToast('重连失败，请刷新页面重试', 'error');
+        this.app.updateConnectionStatus('error', '重连失败');
       }
       return;
     }
 
     this.isReconnecting = true;
     this.reconnectAttempts++;
+    const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
     this.app.updateConnectionStatus('reconnecting', `重连中 (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
     this.app.showToast(`尝试重连... (${this.reconnectAttempts}/${this.maxReconnectAttempts})`, 'success');
 
-    await Utils.delay(this.reconnectDelay * this.reconnectAttempts);
+    await Utils.delay(delay);
 
     try {
       if (this.app.isHost) {
@@ -653,9 +715,11 @@ class ConnectionManager {
           joinedAt: Date.now()
         };
         this.app.ui.renderDevicesList(this.app.devices, this.app.peerId, this.app.isHost);
-        setTimeout(() => this.connectToRoom(this.app.roomId), 500);
+        await Utils.delay(500);
+        this.connectToRoom(this.app.roomId);
       }
       this.isReconnecting = false;
+      this.reconnectAttempts = 0;
     } catch (error) {
       console.error('Reconnect failed:', error);
       this.isReconnecting = false;
@@ -734,6 +798,9 @@ class UIController {
       disconnectBtn: document.getElementById('disconnectBtn'),
       confirmJoinBtn: document.getElementById('confirmJoinBtn'),
       roomDisplay: document.getElementById('roomDisplay'),
+      roomShare: document.getElementById('roomShare'),
+      roomShareCode: document.getElementById('roomShareCode'),
+      copyRoomBtn: document.getElementById('copyRoomBtn'),
       joinInputDisplay: document.getElementById('joinInputDisplay'),
       roomId: document.getElementById('roomId'),
       connectionStatus: document.getElementById('connectionStatus'),
@@ -781,6 +848,17 @@ class UIController {
     this.elements.confirmJoinBtn.addEventListener('click', () => this.app.joinRoom());
     this.elements.cancelJoinBtn.addEventListener('click', () => this.cancelJoin());
     this.elements.disconnectBtn.addEventListener('click', () => this.app.disconnect());
+    
+    if (this.elements.copyRoomBtn) {
+      this.elements.copyRoomBtn.addEventListener('click', () => {
+        const code = this.elements.roomShareCode.textContent;
+        navigator.clipboard.writeText(code).then(() => {
+          this.showToast('已复制: ' + code, 'success');
+        }).catch(() => {
+          this.showToast('复制失败', 'error');
+        });
+      });
+    }
     
     this.elements.roomIdInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') this.app.joinRoom();
@@ -1204,6 +1282,9 @@ class UIController {
     this.elements.fileList.innerHTML = '';
     this.elements.sendFilesBtn.classList.add('hidden');
     this.elements.devicesList.classList.add('hidden');
+    if (this.elements.roomShare) {
+      this.elements.roomShare.style.display = 'none';
+    }
   }
 
   switchTab(tabName) {
@@ -1288,39 +1369,52 @@ class FileTransferApp {
 
   generateRoomId() {
     const num = Math.floor(1000 + Math.random() * 9000);
-    return 'yan' + num;
+    return 'fs-' + num;
   }
 
   async createRoom() {
-    try {
-      this.roomId = this.generateRoomId();
-      this.isHost = true;
-      this.ui.elements.roomId.textContent = this.roomId;
-      this.ui.elements.roomDisplay.classList.remove('hidden');
-      this.ui.elements.joinInputDisplay.classList.add('hidden');
-      this.ui.elements.createRoomBtn.classList.add('hidden');
-      this.ui.elements.joinRoomBtn.classList.add('hidden');
-      this.ui.elements.confirmJoinBtn.classList.add('hidden');
-      this.ui.elements.cancelJoinBtn.classList.add('hidden');
-      this.ui.elements.disconnectBtn.classList.remove('hidden');
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        this.roomId = this.generateRoomId();
+        this.isHost = true;
+        this.ui.elements.roomId.textContent = this.roomId;
+        this.ui.elements.roomDisplay.classList.remove('hidden');
+        this.ui.elements.joinInputDisplay.classList.add('hidden');
+        this.ui.elements.createRoomBtn.classList.add('hidden');
+        this.ui.elements.joinRoomBtn.classList.add('hidden');
+        this.ui.elements.confirmJoinBtn.classList.add('hidden');
+        this.ui.elements.cancelJoinBtn.classList.add('hidden');
+        this.ui.elements.disconnectBtn.classList.remove('hidden');
 
-      this.ui.updateConnectionStatus('waiting', '等待连接');
-      
-      await this.connectionManager.initPeer(this.roomId);
-      
-      this.devices[this.peerId] = {
-        id: this.peerId,
-        nickname: this.nickname,
-        joinedAt: Date.now()
-      };
-      this.ui.renderDevicesList(this.devices, this.peerId, this.isHost);
-      
-      this.ui.switchTab('file');
-      this.ui.showToast('房间创建成功，等待其他设备加入...', 'success');
-    } catch (error) {
-      console.error('Failed to create room:', error);
-      this.ui.showToast('创建房间失败', 'error');
-      this.disconnect();
+        this.ui.updateConnectionStatus('waiting', '正在创建房间...');
+        
+        await this.connectionManager.initPeer(this.roomId);
+        
+        this.devices[this.peerId] = {
+          id: this.peerId,
+          nickname: this.nickname,
+          joinedAt: Date.now()
+        };
+        this.ui.renderDevicesList(this.devices, this.peerId, this.isHost);
+        
+        const shareCode = this.roomId.replace(/^fs-/, '');
+        this.ui.elements.roomShare.style.display = 'inline-flex';
+        this.ui.elements.roomShareCode.textContent = shareCode;
+        
+        this.ui.switchTab('file');
+        this.ui.showToast('房间创建成功，等待其他设备加入...', 'success');
+        return;
+      } catch (error) {
+        console.error('Failed to create room (attempt ' + (attempt + 1) + '/3):', error);
+        if (attempt < 2) {
+          this.ui.showToast('创建房间失败，正在重试... (' + (attempt + 1) + '/3)', 'error');
+          await Utils.delay(500);
+        } else {
+          this.ui.showToast('创建房间失败: ' + (error.message || '请检查网络后重试'), 'error');
+          this.ui.updateConnectionStatus('error', '创建失败');
+          this.disconnect();
+        }
+      }
     }
   }
 
@@ -1331,34 +1425,45 @@ class FileTransferApp {
       return;
     }
 
-    try {
-      this.roomId = 'yan' + inputRoomId;
-      this.isHost = false;
-      this.ui.elements.roomId.textContent = this.roomId;
-      this.ui.elements.roomDisplay.classList.remove('hidden');
-      this.ui.elements.joinInputDisplay.classList.add('hidden');
-      this.ui.elements.createRoomBtn.classList.add('hidden');
-      this.ui.elements.joinRoomBtn.classList.add('hidden');
-      this.ui.elements.confirmJoinBtn.classList.add('hidden');
-      this.ui.elements.cancelJoinBtn.classList.add('hidden');
-      this.ui.elements.disconnectBtn.classList.remove('hidden');
+    const fullRoomId = 'fs-' + inputRoomId;
+    this.ui.updateConnectionStatus('waiting', '正在连接...');
+    this.ui.showToast('正在连接，请稍候...', 'success');
 
-      this.ui.updateConnectionStatus('waiting', '正在连接...');
-      
-      await this.connectionManager.initPeer();
-      
-      this.devices[this.peerId] = {
-        id: this.peerId,
-        nickname: this.nickname,
-        joinedAt: Date.now()
-      };
-      this.ui.renderDevicesList(this.devices, this.peerId, this.isHost);
-      
-      setTimeout(() => this.connectionManager.connectToRoom(this.roomId), 500);
-    } catch (error) {
-      console.error('Failed to join room:', error);
-      this.ui.showToast('加入房间失败', 'error');
-      this.disconnect();
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        this.roomId = fullRoomId;
+        this.isHost = false;
+        this.ui.elements.roomId.textContent = this.roomId;
+        this.ui.elements.roomDisplay.classList.remove('hidden');
+        this.ui.elements.joinInputDisplay.classList.add('hidden');
+        this.ui.elements.createRoomBtn.classList.add('hidden');
+        this.ui.elements.joinRoomBtn.classList.add('hidden');
+        this.ui.elements.confirmJoinBtn.classList.add('hidden');
+        this.ui.elements.cancelJoinBtn.classList.add('hidden');
+        this.ui.elements.disconnectBtn.classList.remove('hidden');
+
+        await this.connectionManager.initPeer();
+        
+        this.devices[this.peerId] = {
+          id: this.peerId,
+          nickname: this.nickname,
+          joinedAt: Date.now()
+        };
+        this.ui.renderDevicesList(this.devices, this.peerId, this.isHost);
+        
+        setTimeout(() => this.connectionManager.connectToRoom(this.roomId), 500);
+        return;
+      } catch (error) {
+        console.error('Failed to join room (attempt ' + (attempt + 1) + '/3):', error);
+        if (attempt < 2) {
+          this.ui.showToast('加入房间失败，正在重试... (' + (attempt + 1) + '/3)', 'error');
+          await Utils.delay(500);
+        } else {
+          this.ui.showToast('加入房间失败: ' + (error.message || '请检查房间号和网络'), 'error');
+          this.ui.updateConnectionStatus('error', '连接失败');
+          this.disconnect();
+        }
+      }
     }
   }
 

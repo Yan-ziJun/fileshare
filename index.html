@@ -128,13 +128,18 @@
             <div class="settings-section">
                 <div class="room-section">
                     <div id="roomDisplay" class="room-display">
-                        <div class="room-label">房间号</div>
+                        <div class="room-label">房间号 <span class="room-tip">(分享后4位给好友)</span></div>
                         <div class="room-id" id="roomId">------</div>
+                        <div class="room-share" id="roomShare" style="display:none;">
+                            <span class="room-share-label">分享：</span>
+                            <span class="room-share-code" id="roomShareCode"></span>
+                            <button class="btn-copy" id="copyRoomBtn" title="复制">📋</button>
+                        </div>
                         <div class="status waiting" id="connectionStatus">等待连接</div>
                     </div>
                     <div id="joinInputDisplay" class="room-display hidden">
                         <div class="room-label">输入房间号</div>
-                        <input type="text" id="roomIdInput" class="join-room-input" placeholder="请输入后4位" maxlength="4">
+                        <input type="text" id="roomIdInput" class="join-room-input" placeholder="请输入后4位" maxlength="4" pattern="\d*" inputmode="numeric">
                     </div>
                     <div class="room-actions">
                         <button id="createRoomBtn" class="btn btn-primary">创建房间</button>

@@ -308,6 +308,51 @@ body {
   margin-bottom: 8px;
 }
 
+.room-tip {
+  font-size: 11px;
+  font-weight: 400;
+  color: #94a3b8;
+  letter-spacing: 0;
+}
+
+.room-share {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px dashed #94a3b8;
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 8px;
+  font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+.room-share-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.room-share-code {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 2px;
+}
+
+.btn-copy {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.btn-copy:hover {
+  background: #f1f5f9;
+}
+
 .room-display .status {
   font-size: 14px;
   color: #64748b;
